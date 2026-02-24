@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Idea Validator — Strategic Validation Platform</title>
+    <!-- Fonts: Inter for clean typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+
+<body>
+
+    <!-- Navigation -->
+    <nav class="navbar">
+        <a href="#/" class="brand">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                <path d="M2 17l10 5 10-5" />
+                <path d="M2 12l10 5 10-5" />
+            </svg>
+            IdeaValidator.ai
+        </a>
+        <div class="nav-links">
+            <a href="#/" class="nav-link" data-route="/">Dashboard</a>
+            <a href="#/compare" class="nav-link" data-route="/compare">Compare</a>
+            <a href="#/glossary" class="nav-link" data-route="/glossary">Methodology</a>
+            <a href="#/settings" class="nav-link" data-route="/settings">Settings</a>
+            <button class="btn btn-primary btn-sm" onclick="window.IdeaApp.showNewIdeaModal()">+ New Idea</button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div id="mainContainer" class="app-container">
+        <div id="appContent">
+            <!-- Routed views (Dashboard, IdeaDetail, Comparison) injected here -->
+        </div>
+    </div>
+
+    <!-- Sliding Activity Drawer for Real-time Logs -->
+    <div id="drawerOverlay" class="drawer-overlay" onclick="window.IdeaApp.closeActivityDrawer()"></div>
+    <div id="activityDrawer" class="activity-drawer">
+        <div class="drawer-header">
+            <h3>Activity Console</h3>
+            <button class="drawer-close" onclick="window.IdeaApp.closeActivityDrawer()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+            </button>
+        </div>
+        <div class="drawer-content" id="drawerContent">
+            <div class="text-dim text-sm text-center mt-3">No active validation running.</div>
+        </div>
+    </div>
+
+    <!-- New Idea Modal -->
+    <div id="newIdeaModal" class="modal-overlay" onclick="if(event.target===this) window.IdeaApp.closeNewIdeaModal()">
+        <form id="newIdeaForm" class="modal-content" onsubmit="window.IdeaApp.submitNewIdea(event)">
+            <div class="modal-header">
+                <h2>New Startup Idea</h2>
+                <button type="button" class="drawer-close" onclick="window.IdeaApp.closeNewIdeaModal()"><svg width="20"
+                        height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg></button>
+            </div>
+
+            <div class="form-group">
+                <label for="ideaTitle">Startup Name / Title</label>
+                <input type="text" id="ideaTitle" class="form-control" placeholder="e.g. AI-Powered Resume Builder"
+                    required>
+            </div>
+
+            <div class="form-group">
+                <label for="ideaDescription">Core Concept (Target Audience, Problem, Solution)</label>
+                <textarea id="ideaDescription" class="form-control" rows="5"
+                    placeholder="Describe the idea in 2-3 sentences. Who is it for? What problem does it solve?"
+                    required></textarea>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:2rem">
+                <button type="button" class="btn btn-outline"
+                    onclick="window.IdeaApp.closeNewIdeaModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create & Validate</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toastContainer"></div>
+
+    <!-- App Scripts -->
+    <script src="/static/js/app.js?v=3"></script>
+    <script src="/static/js/dashboard.js?v=5"></script>
+    <script src="/static/js/idea-detail.js"></script>
+    <script src="/static/js/tasks.js"></script>
+    <script src="/static/js/journal.js"></script>
+    <script src="/static/js/experiments.js"></script>
+    <script src="/static/js/stickies.js"></script>
+    <script src="/static/js/comparison.js"></script>
+    <script src="/static/js/glossary.js"></script>
+    <script src="/static/js/settings.js?v=2"></script>
+    <script src="/static/js/pdf-export.js"></script>
+
+</body>
+
+</html>
