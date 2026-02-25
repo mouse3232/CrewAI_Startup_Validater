@@ -551,7 +551,6 @@ async def stream_validation(idea_id: int, db: Session = Depends(get_db)):
         validation = Validation(
             idea_id=idea.id,
             iteration=current_count + 1,
-            status="validating" # We need to add this field or just use the Idea status
         )
         db.add(validation)
         db.commit()

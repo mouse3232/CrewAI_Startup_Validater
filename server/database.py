@@ -93,7 +93,7 @@ def _safe_add_columns():
 
     migrations = [
         # ── ideas table ──────────────────────────────────────────────
-        ("ideas", "workspace_id", "INTEGER REFERENCES workspaces(id) ON DELETE CASCADE"),
+        ("ideas", "workspace_id", "INTEGER"),
         ("ideas", "structured_input", f"{json_type} {json_default_dict}"),
         ("ideas", "updated_at", "TIMESTAMP"),
         # ── validations table ────────────────────────────────────────
@@ -134,15 +134,18 @@ def _safe_add_columns():
         ("expenses", "notes", "TEXT"),
         ("expenses", "updated_at", "TIMESTAMP"),
     ]
-    with engine.connect() as conn:
-        for table, column, col_type in migrations:
-            try:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
+
+    # Use a separate connection per migration to avoid PostgreSQL's
+    # "current transaction is aborted" state poisoning later ALTERs.
+    for table, column, col_type in migrations:
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(
+                    f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"
+                ))
                 conn.commit()
                 logger.info("Added column %s.%s", table, column)
-            except Exception:
-                # Column already exists or table doesn't exist yet — safe to ignore
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
+        except Exception as exc:
+            # Column already exists or table doesn't exist yet — safe to ignore
+            logger.debug("Skipping %s.%s: %s", table, column, exc)
+
