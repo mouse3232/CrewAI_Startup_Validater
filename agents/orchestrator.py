@@ -55,6 +55,10 @@ class OrchestratorAgent(BaseAgent):
             "  - market_forces: list of key forces affecting this market"
         )
         user = f"Analyze this startup idea:\n\n{idea}"
+        if context.get("structured_input"):
+            import json
+            user += f"\n\nHere is the exact structured input provided by the founder:\n{json.dumps(context['structured_input'], indent=2)}"
+            
         if context.get("improvements"):
             user += (
                 f"\n\nPrevious analysis had weaknesses. Consider these improvements:\n"
@@ -107,8 +111,9 @@ class OrchestratorAgent(BaseAgent):
             {"role": "user", "content": user},
         ]
         raw = self.client.chat_completion(
-            config=self.config,
+            model=self.config.model,
             messages=messages,
-            task_type="executive_summary"
+            temperature=0.5,
+            max_tokens=4096,
         )
         return self._parse_json(raw)

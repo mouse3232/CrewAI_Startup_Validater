@@ -14,12 +14,10 @@ def get_replacement_model(original_key: str, models_registry: dict, disabled_mod
     Finds the best replacement model based on matrix or smart selection.
     """
     fallback_matrix = {
-        "gpt-120b": ["gemini-2.5-pro", "llama-70b", "llama-scout", "llama-maverick", "kimi"],
-        "gpt-20b": ["gemini-2.5-flash", "llama-70b", "llama-maverick", "kimi", "llama-8b"],
-        "gpt-safeguard": ["gemini-2.5-flash-lite", "llama-guard", "prompt-guard-86m", "prompt-guard-22m"],
-        "llama-70b": ["gemini-2.5-pro", "llama-scout", "gpt-20b", "kimi", "llama-maverick"],
-        "gemini-2.5-pro": ["gpt-120b", "llama-70b", "llama-scout"],
-        "gemini-2.5-flash": ["gpt-20b", "llama-maverick", "llama-scout"],
+        "gpt-120b": ["llama-70b", "llama-scout", "llama-maverick", "kimi"],
+        "gpt-20b": ["llama-70b", "llama-maverick", "kimi", "llama-8b"],
+        "gpt-safeguard": ["llama-guard", "prompt-guard-86m", "prompt-guard-22m"],
+        "llama-70b": ["llama-scout", "gpt-20b", "kimi", "llama-maverick"]
     }
 
     # 1. Use manual fallback list if defined
@@ -27,13 +25,11 @@ def get_replacement_model(original_key: str, models_registry: dict, disabled_mod
         for candidate_key in fallback_matrix[original_key]:
             if candidate_key in models_registry and candidate_key not in disabled_models:
                 candidate = models_registry[candidate_key]
-                # Check RPM/TPM/RPD
-                usage = usage_metrics.get(candidate.model, {"rpm": 0, "tpm": 0, "rpd": 0})
+                # Check RPM/TPM
+                usage = usage_metrics.get(candidate.model, {"rpm": 0, "tpm": 0})
                 rpm_ratio = usage["rpm"] / candidate.max_rpm if candidate.max_rpm else 0
                 tpm_ratio = usage["tpm"] / candidate.max_tpm if candidate.max_tpm else 0
-                rpd_ratio = usage["rpd"] / candidate.max_rpd if candidate.max_rpd else 0
-                
-                if rpm_ratio < 0.9 and tpm_ratio < 0.9 and rpd_ratio < 0.9:
+                if rpm_ratio < 0.9 and tpm_ratio < 0.9:
                     return candidate_key, candidate
 
     # 2. Smart Selection if matrix failed or undefined
@@ -65,16 +61,14 @@ def get_replacement_model(original_key: str, models_registry: dict, disabled_mod
         if task_type not in ("safety_check", "input_guard", "output_guard", "risk_inversion") and is_safety:
             continue # Don't use safety models for reasoning
         
-        # Check capacity (including RPD)
-        usage = usage_metrics.get(model.model, {"rpm": 0, "tpm": 0, "rpd": 0})
+        # Check capacity
+        usage = usage_metrics.get(model.model, {"rpm": 0, "tpm": 0})
         rpm_ratio = usage["rpm"] / model.max_rpm if model.max_rpm else 0
         tpm_ratio = usage["tpm"] / model.max_tpm if model.max_tpm else 0
-        rpd_ratio = usage["rpd"] / model.max_rpd if model.max_rpd else 0
-        
-        if rpm_ratio >= 1.0 or tpm_ratio >= 1.0 or rpd_ratio >= 1.0:
+        if rpm_ratio >= 1.0 or tpm_ratio >= 1.0:
             continue # Rate limited
             
-        available_quota = 1.0 - max(rpm_ratio, tpm_ratio, rpd_ratio)
+        available_quota = 1.0 - max(rpm_ratio, tpm_ratio)
         
         reasoning = model.metadata.get("reasoning_score", 5) if model.metadata else 5
         speed = model.metadata.get("speed_score", 5) if model.metadata else 5

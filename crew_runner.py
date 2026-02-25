@@ -21,6 +21,9 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable
 
+from server.database import SessionLocal
+from server.db_models import AgentSession, AgentMessage
+
 from core.gateway_client import GatewayClient
 from core.memory_manager import SharedMemory
 from core.model_router import get_model_config
@@ -82,7 +85,9 @@ def _run_agent(agent_cls, client, idea, context):
 
 async def run_validation(
     idea_text: str,
+    structured_input: dict | None = None,
     status_cb: StatusCallback | None = None,
+    session_id: int | None = None,
 ) -> dict[str, Any]:
     """
     Full validation pipeline following the tiered orchestration flow:
@@ -98,6 +103,24 @@ async def run_validation(
     cb = status_cb or _noop_status
     client = GatewayClient()
     memory = SharedMemory(idea_input=idea_text)
+
+    def _log_to_db(agent_name: str, step_name: str, content: str, status: str = "started", metadata: dict | None = None):
+        if not session_id:
+            return
+        try:
+            with SessionLocal() as db:
+                msg = AgentMessage(
+                    session_id=session_id,
+                    agent_name=agent_name,
+                    step_name=step_name,
+                    content=content,
+                    status=status,
+                    metadata_json=metadata or {}
+                )
+                db.add(msg)
+                db.commit()
+        except Exception as e:
+            logger.error(f"Failed to log agent message to DB: {e}")
     
     # ── Step 0: Input Guard (Prompt Guard) ───────────────────────────
     cb("input_guard", "Checking input safety...")
@@ -114,21 +137,25 @@ async def run_validation(
 
     # ── Step 1: Orchestrator structures the idea (Tier 1 — gpt-oss-120b) ──
     cb("orchestrator", "Structuring and analyzing the idea…")
+    _log_to_db("orchestrator", "Initial Scan", "Analyzing raw input and building startup chassis.", "started")
     orchestrator = OrchestratorAgent(client)
-    structured = orchestrator.run(idea_text)
+    structured = orchestrator.run(idea_text, context={"structured_input": structured_input} if structured_input else {})
     memory.structured_idea = structured
     cb("orchestrator", "Idea structured successfully.")
+    _log_to_db("orchestrator", "Initial Scan", "Chassis built: Market, Problem, and Solution boundaries defined.", "completed")
 
-    # ── Step 2: Market Research first (Tier 1 — qwen/qwen3-32b) ──────────
     cb("agent_status", '{"agent": "market_research", "status": "started"}')
     cb("agents", "Running market research analysis (qwen3-32b)…")
+    _log_to_db("market_research", "Market Sizing", "Extracting TAM/SAM/SOM and identifying primary competitors.", "started")
     context = {"structured_idea": structured}
     try:
         market_result = _run_agent(MarketResearchAgent, client, idea_text, context)
         cb("agent_status", '{"agent": "market_research", "status": "completed"}')
+        _log_to_db("market_research", "Market Sizing", "Market intelligence gathered.", "completed")
     except Exception as exc:
         logger.error("Market research failed: %s", exc)
         cb("agent_status", '{"agent": "market_research", "status": "error"}')
+        _log_to_db("market_research", "Market Sizing", f"Failure during research: {exc}", "error")
         market_result = {"error": str(exc)}
 
     results = {"market_research": market_result}
@@ -137,6 +164,7 @@ async def run_validation(
     cb("agents", "Running 4 core reasoning agents in parallel (gpt-oss-20b)…")
     for name in CORE_AGENTS:
         cb("agent_status", f'{{"agent": "{name}", "status": "started"}}')
+        _log_to_db(name, "Parallel Pass", f"Initializing {name.replace('_', ' ')} analysis.", "started")
 
     loop = asyncio.get_event_loop()
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -150,14 +178,17 @@ async def run_validation(
             try:
                 results[name] = await fut
                 cb("agent_status", f'{{"agent": "{name}", "status": "completed"}}')
+                _log_to_db(name, "Parallel Pass", f"{name.replace('_', ' ')} analysis finalized.", "completed")
             except Exception as exc:
                 logger.error("Agent %s failed: %s", name, exc)
                 cb("agent_status", f'{{"agent": "{name}", "status": "error"}}')
+                _log_to_db(name, "Parallel Pass", f"Critical failure in {name}: {exc}", "error")
                 results[name] = {"error": str(exc)}
 
     # ── Step 4: Risk Inversion AFTER main reasoning (Tier 1 — gpt-oss-safeguard-20b) ──
     cb("agent_status", '{"agent": "risk_inversion", "status": "started"}')
     cb("agents", "Running risk inversion analysis (gpt-oss-safeguard-20b)…")
+    _log_to_db("risk_inversion", "Vulnerability Scan", "Simulating failure modes and mapping moats.", "started")
     risk_context = {
         "structured_idea": structured,
         "agent_outputs": results,  # Feed all previous results to risk agent
@@ -165,9 +196,11 @@ async def run_validation(
     try:
         risk_result = _run_agent(RiskInversionAgent, client, idea_text, risk_context)
         cb("agent_status", '{"agent": "risk_inversion", "status": "completed"}')
+        _log_to_db("risk_inversion", "Vulnerability Scan", "Risk profile generated.", "completed")
     except Exception as exc:
         logger.error("Risk inversion failed: %s", exc)
         cb("agent_status", '{"agent": "risk_inversion", "status": "error"}')
+        _log_to_db("risk_inversion", "Vulnerability Scan", f"Error during simulation: {exc}", "error")
         risk_result = {"error": str(exc)}
     results["risk_inversion"] = risk_result
 
@@ -312,4 +345,61 @@ async def run_validation(
         "score_history": memory.score_history,
         "refinement_history": memory.refinement_history,
         "chart_payloads": chart_payloads,
+    }
+
+
+async def regenerate_validation_summary(
+    idea_text: str,
+    agent_outputs: dict[str, Any],
+    final_score: float,
+    decision: str,
+    confidence: float,
+) -> dict[str, Any]:
+    """Generates only the executive summary part of the validation."""
+    client = GatewayClient()
+    orchestrator = OrchestratorAgent(client)
+    try:
+        executive = orchestrator.aggregate_decision(
+            idea_text, agent_outputs, final_score, decision, confidence,
+        )
+        return executive
+    except Exception as exc:
+        logger.error("Summary regeneration failed: %s", exc)
+        return {"executive_summary": "Summary regeneration failed again."}
+
+
+async def generate_risk_analysis(idea_text: str, structured_idea: dict[str, Any]) -> dict[str, Any]:
+    """Runs ONLY the RiskInversionAgent to generate swot/moats/categorization."""
+    from agents.risk_agent import RiskInversionAgent
+    from core.gateway_client import GatewayClient
+    
+    client = GatewayClient()
+    agent = RiskInversionAgent(client)
+    # Mocking previous results as empty since we only want risk analysis
+    context = {
+        "structured_idea": structured_idea,
+        "agent_outputs": {} 
+    }
+    return agent.run(idea_text, context)
+
+
+async def generate_market_financial_analysis(idea_text: str, structured_idea: dict[str, Any]) -> dict[str, Any]:
+    """Runs MarketResearchAgent and PricingAdvisorAgent for financial deep dive."""
+    from agents.market_agent import MarketResearchAgent
+    from agents.pricing_agent import PricingAdvisorAgent
+    from core.gateway_client import GatewayClient
+    
+    client = GatewayClient()
+    market_agent = MarketResearchAgent(client)
+    pricing_agent = PricingAdvisorAgent(client)
+    
+    context = {"structured_idea": structured_idea}
+    
+    # Run in sequence for consistency
+    market_result = market_agent.run(idea_text, context)
+    pricing_result = pricing_agent.run(idea_text, context)
+    
+    return {
+        "market_research": market_result,
+        "pricing_strategy": pricing_result
     }

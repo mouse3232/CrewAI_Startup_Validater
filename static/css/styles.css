@@ -1,5 +1,5 @@
 /* 
- * styles.css — Premium White Theme & Bubble Aesthetics
+ * styles.css — Premium Theme System (Light / Dark / System)
  */
 
 :root {
@@ -8,6 +8,7 @@
     --bg-surface: #ffffff;
     --bg-surface-hover: #f1f5f9;
     --bg-panel: #ffffff;
+    --bg-card: #ffffff;
 
     /* Text */
     --text-main: #0f172a;
@@ -32,12 +33,229 @@
     /* Borders & Shadows */
     --border: #e2e8f0;
     --border-light: #f1f5f9;
-    --radius-sm: 0.5rem;
-    --radius-md: 1rem;
-    --radius-bubble: 1.5rem;
+    --radius-sm: 0.375rem;
+    --radius-md: 0.625rem;
+    --radius-bubble: 1rem;
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-    --shadow-bubble: 0 10px 25px -5px rgba(15, 23, 42, 0.04), 0 8px 10px -6px rgba(15, 23, 42, 0.02);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-bubble: 0 4px 12px -2px rgba(15, 23, 42, 0.06), 0 2px 4px -2px rgba(15, 23, 42, 0.04);
     --shadow-drawer: -10px 0 30px rgba(15, 23, 42, 0.05);
+
+    /* Sidebar */
+    --sidebar-bg: #ffffff;
+    --sidebar-border: #e2e8f0;
+    --sidebar-active-bg: #f1f5f9;
+    --sidebar-width: 220px;
+}
+
+/* ── Dark Theme ──────────────────────────────────────────── */
+[data-theme="dark"] {
+    --bg-main: #0f1117;
+    --bg-surface: #1a1d27;
+    --bg-surface-hover: #252836;
+    --bg-panel: #1a1d27;
+    --bg-card: #1e2130;
+
+    --text-main: #e8eaed;
+    --text-dim: #9aa0b0;
+    --text-muted: #5f6577;
+
+    --primary: #818cf8;
+    --primary-hover: #6366f1;
+    --primary-light: #252847;
+
+    --go: #34d399;
+    --go-bg: rgba(52, 211, 153, 0.12);
+    --improve: #fbbf24;
+    --improve-bg: rgba(251, 191, 36, 0.12);
+    --kill: #f87171;
+    --kill-bg: rgba(248, 113, 113, 0.12);
+    --info: #60a5fa;
+    --info-bg: rgba(96, 165, 250, 0.12);
+
+    --border: #2a2d3a;
+    --border-light: #252836;
+    --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+    --shadow-bubble: 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+    --shadow-drawer: -10px 0 30px rgba(0, 0, 0, 0.4);
+
+    --sidebar-bg: #15171f;
+    --sidebar-border: #2a2d3a;
+    --sidebar-active-bg: #252836;
+}
+
+/* System preference auto-detect (only when no explicit theme set) */
+@media (prefers-color-scheme: dark) {
+    [data-theme="system"] {
+        --bg-main: #0f1117;
+        --bg-surface: #1a1d27;
+        --bg-surface-hover: #252836;
+        --bg-panel: #1a1d27;
+        --bg-card: #1e2130;
+        --text-main: #e8eaed;
+        --text-dim: #9aa0b0;
+        --text-muted: #5f6577;
+        --primary: #818cf8;
+        --primary-hover: #6366f1;
+        --primary-light: #252847;
+        --go: #34d399;
+        --go-bg: rgba(52, 211, 153, 0.12);
+        --improve: #fbbf24;
+        --improve-bg: rgba(251, 191, 36, 0.12);
+        --kill: #f87171;
+        --kill-bg: rgba(248, 113, 113, 0.12);
+        --info: #60a5fa;
+        --info-bg: rgba(96, 165, 250, 0.12);
+        --border: #2a2d3a;
+        --border-light: #252836;
+        --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3);
+        --shadow-bubble: 0 4px 16px -2px rgba(0, 0, 0, 0.4);
+        --shadow-drawer: -10px 0 30px rgba(0, 0, 0, 0.4);
+        --sidebar-bg: #15171f;
+        --sidebar-border: #2a2d3a;
+        --sidebar-active-bg: #252836;
+    }
+}
+
+/* ── Tooltips ────────────────────────────────────────────── */
+.tooltip-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.tooltip-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--primary-light);
+    color: var(--text-dim);
+    font-size: 0.65rem;
+    font-weight: 700;
+    cursor: help;
+    flex-shrink: 0;
+}
+
+.tooltip-text {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text-main);
+    color: var(--bg-main);
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    white-space: nowrap;
+    max-width: 280px;
+    white-space: normal;
+    z-index: 100;
+    transition: opacity 0.15s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.tooltip-wrap:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* ── Collapsible Sections ────────────────────────────────── */
+.collapsible-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid var(--border-light);
+    transition: background 0.15s ease;
+}
+
+.collapsible-header:hover {
+    background: var(--bg-surface-hover);
+}
+
+.collapsible-header .chevron {
+    transition: transform 0.2s ease;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+}
+
+.collapsible-header.open .chevron {
+    transform: rotate(180deg);
+}
+
+.collapsible-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+}
+
+.collapsible-body.open {
+    max-height: 5000px;
+}
+
+/* ── Metric Grid (Horizontal KPI strips) ─────────────────── */
+.metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.metric-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    text-align: center;
+}
+
+.metric-card .metric-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+    margin-bottom: 0.25rem;
+}
+
+.metric-card .metric-value {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+/* ── Theme Toggle ────────────────────────────────────────── */
+.theme-toggle {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--bg-surface-hover);
+    border-radius: var(--radius-sm);
+    padding: 2px;
+}
+
+.theme-toggle button {
+    padding: 4px 10px;
+    border-radius: calc(var(--radius-sm) - 2px);
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    transition: all 0.15s ease;
+}
+
+.theme-toggle button.active {
+    background: var(--bg-surface);
+    color: var(--text-main);
+    box-shadow: var(--shadow-sm);
+    font-weight: 600;
 }
 
 /* ── Reset & Base ────────────────────────────────────────── */
@@ -117,61 +335,113 @@ button {
 
 /* ── Container & Shell ─────────────────────────────────── */
 .app-container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
-    padding: 2rem 1rem;
+    padding: 1.5rem 2rem;
     position: relative;
-    transition: margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.app-container.drawer-open {
-    margin-right: 400px;
-}
-
-.navbar {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid var(--border);
-    position: sticky;
+/* ── Navigation Shell ──────────────────────────────────── */
+.sidebar {
+    position: fixed;
     top: 0;
-    z-index: 100;
-    padding: 0.75rem 2rem;
+    left: 0;
+    width: var(--sidebar-width);
+    height: 100vh;
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    z-index: 1000;
 }
 
-.brand {
-    font-weight: 800;
-    font-size: 1.25rem;
-    color: var(--primary);
+.sidebar-brand {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--sidebar-border);
+}
+
+.sidebar-brand a {
     display: flex;
     align-items: center;
+    gap: 0.75rem;
+    font-weight: 800;
+    font-size: 1.15rem;
+    color: var(--text-main);
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 1.5rem 0.75rem;
+    display: flex;
+    flex-direction: column;
     gap: 0.5rem;
 }
 
-.nav-links {
+.sidebar-link {
     display: flex;
-    gap: 1.5rem;
     align-items: center;
-}
-
-.nav-link {
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-sm);
     color: var(--text-dim);
     font-weight: 500;
     font-size: 0.9rem;
-    transition: color 0.2s;
-    padding: 0.25rem 0;
+    transition: all 0.2s;
 }
 
-.nav-link:hover,
-.nav-link.active {
+.sidebar-link:hover,
+.sidebar-link.active {
+    background: var(--sidebar-active-bg);
     color: var(--primary);
 }
 
-.nav-link.active {
-    border-bottom: 2px solid var(--primary);
+.sidebar-link.active {
+    font-weight: 700;
+}
+
+.sidebar-footer {
+    padding: 1.5rem;
+    border-top: 1px solid var(--sidebar-border);
+}
+
+.topbar {
+    position: fixed;
+    top: 0;
+    left: var(--sidebar-width);
+    right: 0;
+    height: 60px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 2rem;
+    z-index: 900;
+}
+
+.app-container.with-sidebar {
+    margin-left: var(--sidebar-width);
+    padding-top: 80px;
+    /* Space for topbar */
+    max-width: none;
+    width: calc(100% - var(--sidebar-width));
+}
+
+@media (max-width: 992px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s;
+    }
+
+    .topbar {
+        left: 0;
+    }
+
+    .app-container.with-sidebar {
+        margin-left: 0;
+        width: 100%;
+    }
 }
 
 /* ── Sticky Notes ───────────────────────────────────────── */
@@ -328,6 +598,122 @@ h3 {
     box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.2);
 }
 
+/* ── Sub Tabs (Horizontal Module Navigation) ──────────────── */
+.sub-tabs {
+    display: flex;
+    gap: 1.5rem;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 1.5rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    /* Hide scrollbar Firefox */
+}
+
+.sub-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+/* Hide scrollbar Chrome/Safari */
+
+.sub-tab-btn {
+    padding: 0.75rem 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.sub-tab-btn:hover {
+    color: var(--primary);
+}
+
+.sub-tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: 700;
+}
+
+/* ── Badges ────────────────────────────────────────────── */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.badge-info {
+    background: var(--info-bg);
+    color: var(--info);
+}
+
+.badge-go {
+    background: var(--go-bg);
+    color: var(--go);
+}
+
+.badge-kill {
+    background: var(--kill-bg);
+    color: var(--kill);
+}
+
+.badge-improve {
+    background: var(--improve-bg);
+    color: var(--improve);
+}
+
+.badge-draft {
+    background: var(--border-light);
+    color: var(--text-dim);
+}
+
+/* ── Layout Utilities ───────────────────────────────────── */
+.grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.grid-2 {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+.grid-3 {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.grid-4 {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.align-center {
+    align-items: center;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+.capitalize {
+    text-transform: capitalize;
+}
+
+.uppercase {
+    text-transform: uppercase;
+}
+
+.italic {
+    font-style: italic;
+}
+
 .btn-primary:hover:not(:disabled) {
     background-color: var(--primary-hover);
     box-shadow: 0 6px 12px -2px rgba(15, 23, 42, 0.25);
@@ -370,10 +756,15 @@ h3 {
 .bubble-card {
     background: var(--bg-surface);
     border: 1px solid var(--border);
-    border-radius: var(--radius-bubble);
+    border-radius: var(--radius-md);
     padding: 1.5rem;
-    box-shadow: var(--shadow-bubble);
-    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+    border-color: var(--border);
+    box-shadow: var(--shadow-md);
 }
 
 /* ── Dashboard Grid ────────────────────────────────────── */
@@ -561,6 +952,7 @@ h3 {
 /* ── Idea Detail view ──────────────────────────────────── */
 .detail-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     margin-bottom: 1rem;
@@ -1430,5 +1822,111 @@ input:checked+.toggle-slider:before {
     100% {
         transform: scale(2);
         opacity: 0;
+    }
+}
+
+/* ── Sidebar Layout ─────────────────────────────────────── */
+.sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width);
+    background: var(--sidebar-bg);
+    border-right: 1px solid var(--sidebar-border);
+    display: flex;
+    flex-direction: column;
+    z-index: 50;
+    transition: background 0.2s ease;
+}
+
+.sidebar-brand {
+    padding: 1.25rem 1rem;
+    border-bottom: 1px solid var(--sidebar-border);
+}
+
+.sidebar-brand a {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: -0.02em;
+    color: var(--text-main);
+}
+
+.sidebar-nav {
+    flex: 1;
+    padding: 0.75rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow-y: auto;
+}
+
+.sidebar-link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    transition: all 0.12s ease;
+}
+
+.sidebar-link:hover {
+    background: var(--sidebar-active-bg);
+    color: var(--text-main);
+}
+
+.sidebar-link.active {
+    background: var(--sidebar-active-bg);
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.sidebar-footer {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--sidebar-border);
+}
+
+/* ── Top Bar ─────────────────────────────────────────────── */
+.topbar {
+    position: fixed;
+    top: 0;
+    left: var(--sidebar-width);
+    right: 0;
+    height: 52px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    z-index: 40;
+    transition: background 0.2s ease;
+}
+
+/* ── Main Content with Sidebar ───────────────────────────── */
+.app-container.with-sidebar {
+    margin-left: var(--sidebar-width);
+    padding-top: 52px;
+    min-height: 100vh;
+}
+
+/* ── Responsive ─ hide sidebar on small screens ──────────── */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+    }
+
+    .topbar {
+        left: 0;
+    }
+
+    .app-container.with-sidebar {
+        margin-left: 0;
     }
 }

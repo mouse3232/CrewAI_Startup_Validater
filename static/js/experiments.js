@@ -90,8 +90,46 @@ window.Experiments = (() => {
     }
 
     function showNewExperimentModal() {
-        app().toast('Experiment design modal coming soon!', 'info');
+        const modal = document.getElementById('newExperimentModal');
+        if (modal) modal.classList.add('open');
+        const input = document.getElementById('exp-hypothesis');
+        if (input) input.focus();
     }
 
-    return { init, showNewExperimentModal };
+    function closeModal() {
+        const modal = document.getElementById('newExperimentModal');
+        if (modal) modal.classList.remove('open');
+        // Reset form
+        const form = modal.querySelector('form');
+        if (form) form.reset();
+    }
+
+    async function submitNewExperiment(event) {
+        event.preventDefault();
+        const hypothesis = document.getElementById('exp-hypothesis').value.trim();
+        const metric = document.getElementById('exp-metric').value.trim();
+        const target_criteria = document.getElementById('exp-target').value.trim();
+        const timeframe = document.getElementById('exp-timeframe').value.trim();
+
+        if (!hypothesis || !metric || !target_criteria) return;
+
+        try {
+            await app().apiFetch(`/ideas/${currentIdeaId}/experiments`, {
+                method: 'POST',
+                body: JSON.stringify({ hypothesis, metric, target_criteria, timeframe })
+            });
+
+            closeModal();
+            app().toast('Experiment design saved', 'success');
+
+            // Refresh experiments
+            const container = document.getElementById('tabContent-experiments');
+            if (container) init(currentIdeaId, 'tabContent-experiments');
+
+        } catch (err) {
+            app().toast(`Failed to save experiment: ${err.message}`, 'error');
+        }
+    }
+
+    return { init, showNewExperimentModal, closeModal, submitNewExperiment };
 })();

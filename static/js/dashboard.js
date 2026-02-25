@@ -7,7 +7,6 @@
 window.Dashboard = (() => {
     const app = () => window.IdeaApp;
     const $content = () => document.getElementById('appContent');
-    let currentView = 'strategic'; // 'strategic' | 'technical'
 
     async function render() {
         const el = $content();
@@ -28,83 +27,124 @@ window.Dashboard = (() => {
     function buildDashboardHTML(ideas) {
         const completed = ideas.filter(i => i.status === 'completed');
         const goCount = completed.filter(i => i.latest_decision === 'GO').length;
-        const improveCount = completed.filter(i => i.latest_decision === 'IMPROVE').length;
-        const killCount = completed.filter(i => i.latest_decision === 'KILL').length;
-        const avgScore = completed.length
-            ? (completed.reduce((s, i) => s + (i.latest_score || 0), 0) / completed.length).toFixed(1)
-            : '—';
+
+        let totalMonthlyBurn = 0;
+        let totalMonthlyRevenue = 0;
+        let totalActiveTasks = 0;
+        let totalMeetings = 0;
+
+        completed.forEach(i => {
+            const fin = i.validations?.[0]?.agent_outputs?.['business_model']?.financial_breakdown?.cash_flow_projection;
+            if (fin) {
+                totalMonthlyBurn += parseFloat(String(fin.monthly_burn || '0').replace(/[^0-9.]/g, '') || 0);
+                totalMonthlyRevenue += parseFloat(String(fin.monthly_inflow || '0').replace(/[^0-9.]/g, '') || 0);
+            }
+        });
+
+        ideas.forEach(i => {
+            totalActiveTasks += (i.tasks_total || 0) - (i.tasks_completed || 0);
+            totalMeetings += (i.meetings_count || 0);
+        });
+
+        const successRate = completed.length ? ((goCount / completed.length) * 100).toFixed(0) : 0;
 
         return `
-        <!-- Header Bar -->
-        <div class="dash-header" style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
-            <div>
-                <h1 style="font-size:1.75rem;font-weight:800;letter-spacing:-0.02em;margin:0">Strategic Command Center</h1>
-                <p class="text-dim text-sm" style="margin-top:0.25rem">${ideas.length} ideas tracked · ${completed.length} validated</p>
-            </div>
-            <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-                <div class="view-toggle" style="display:flex;border:1px solid var(--border);border-radius:999px;overflow:hidden">
-                    <button class="view-btn ${currentView === 'strategic' ? 'active' : ''}" data-view="strategic" style="padding:0.35rem 1rem;font-size:0.8rem;border:none;cursor:pointer;font-weight:600;background:${currentView === 'strategic' ? 'var(--primary)' : 'transparent'};color:${currentView === 'strategic' ? '#fff' : 'var(--text-dim)'}">Strategic</button>
-                    <button class="view-btn ${currentView === 'technical' ? 'active' : ''}" data-view="technical" style="padding:0.35rem 1rem;font-size:0.8rem;border:none;border-left:1px solid var(--border);cursor:pointer;font-weight:600;background:${currentView === 'technical' ? 'var(--primary)' : 'transparent'};color:${currentView === 'technical' ? '#fff' : 'var(--text-dim)'}">Technical</button>
+        <!-- Hero Command Center -->
+        <div class="dash-hero" style="background:var(--primary); color:white; padding:2.5rem; border-radius:var(--radius-md); margin-bottom:2rem; position:relative; overflow:hidden;">
+            <div style="position:relative; z-index:2;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+                    <div>
+                        <h1 style="color:white; margin:0; font-size:2rem; letter-spacing:-0.03em;">Founder OS v2.0</h1>
+                        <p style="opacity:0.7; font-size:0.9rem;">Portfolio Monitoring & Macro Intelligence</p>
+                    </div>
+                    <button class="btn" onclick="window.IdeaApp.showNewIdeaModal()" style="background:white; color:var(--primary); border-radius:999px; padding:0.6rem 1.2rem; font-weight:700;">+ New Innovation</button>
                 </div>
-                <div style="position:relative;display:flex;align-items:center">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;left:12px;pointer-events:none"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input type="text" id="dashSearch" placeholder="Search ideas…" style="width:240px;padding:0.55rem 2.75rem 0.55rem 2.4rem;font-size:0.85rem;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,0.6);backdrop-filter:blur(8px);color:var(--text);outline:none;transition:all 0.3s ease;box-shadow:0 1px 3px rgba(0,0,0,0.04)" onfocus="this.style.borderColor='var(--primary)';this.style.boxShadow='0 0 0 3px rgba(59,130,246,0.12),0 1px 3px rgba(0,0,0,0.04)';this.style.width='280px'" onblur="this.style.borderColor='var(--border)';this.style.boxShadow='0 1px 3px rgba(0,0,0,0.04)';if(!this.value) this.style.width='240px'">
-                    <kbd style="position:absolute;right:10px;font-size:0.6rem;padding:0.15rem 0.4rem;border-radius:4px;background:var(--bg-alt);border:1px solid var(--border-light);color:var(--text-dim);font-family:inherit;pointer-events:none;opacity:0.7">⌘K</kbd>
+                
+                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:1rem; margin-top:1.5rem;">
+                    <div style="background:rgba(255,255,255,0.1); padding:1.25rem; border-radius:var(--radius-sm); backdrop-filter:blur(10px);">
+                        <div style="opacity:0.6; margin-bottom:0.5rem; font-size:0.7rem; text-transform:uppercase; font-weight:800;">Pipeline Portfolio</div>
+                        <div style="font-size:1.75rem; font-weight:800;">${ideas.length} <span style="opacity:0.6; font-size:0.8rem; font-weight:400;">Assets</span></div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.1); padding:1.25rem; border-radius:var(--radius-sm); backdrop-filter:blur(10px);">
+                        <div style="opacity:0.6; margin-bottom:0.5rem; font-size:0.7rem; text-transform:uppercase; font-weight:800;">Validation ROI</div>
+                        <div style="font-size:1.75rem; font-weight:800;">${successRate}% <span style="opacity:0.6; font-size:0.8rem; font-weight:400;">GO Rate</span></div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.1); padding:1.25rem; border-radius:var(--radius-sm); backdrop-filter:blur(10px);">
+                        <div style="opacity:0.6; margin-bottom:0.5rem; font-size:0.7rem; text-transform:uppercase; font-weight:800;">Active Tasks</div>
+                        <div style="font-size:1.75rem; font-weight:800;">${totalActiveTasks} <span style="opacity:0.6; font-size:0.8rem; font-weight:400;">Pending</span></div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.1); padding:1.25rem; border-radius:var(--radius-sm); backdrop-filter:blur(10px);">
+                        <div style="opacity:0.6; margin-bottom:0.5rem; font-size:0.7rem; text-transform:uppercase; font-weight:800;">Total Monthly Burn</div>
+                        <div style="font-size:1.75rem; font-weight:800;">₹${(totalMonthlyBurn / 1000).toFixed(1)}k <span style="opacity:0.6; font-size:0.8rem; font-weight:400;">Projected</span></div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.1); padding:1.25rem; border-radius:var(--radius-sm); backdrop-filter:blur(10px);">
+                        <div style="opacity:0.6; margin-bottom:0.5rem; font-size:0.7rem; text-transform:uppercase; font-weight:800;">Meta Strategy</div>
+                        <div style="font-size:1.75rem; font-weight:800;">${totalMeetings} <span style="opacity:0.6; font-size:0.8rem; font-weight:400;">Sessions</span></div>
+                    </div>
                 </div>
-                <button class="btn btn-primary" onclick="location.hash='#/new'" style="font-size:0.85rem">+ New Idea</button>
+            </div>
+            <div style="position:absolute; top:0; right:0; width:40%; height:100%; background:linear-gradient(45deg, transparent, rgba(255,255,255,0.05)); z-index:1;"></div>
+        </div>
+
+        <!-- Portfolio Health Strip -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="margin:0; font-weight:800;">Portfolio Health & Risk Map</h3>
+            <span style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Horizontal Scan</span>
+        </div>
+        <div class="horizontal-strip" style="display:flex; gap:1rem; overflow-x:auto; padding-bottom:1rem; margin-bottom:2rem;">
+            ${completed.length === 0 ? '<div class="card" style="width:100%; text-align:center; color:var(--text-dim); padding:2rem;">No validated ideas to map</div>' : completed.map(i => `
+                <div class="card" style="min-width:280px; flex-shrink:0; cursor:pointer;" onclick="location.hash='#/idea/${i.id}'">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <span style="font-weight:700; font-size:0.875rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;">${esc(i.title)}</span>
+                        <span class="badge ${i.latest_decision === 'GO' ? 'badge-go' : i.latest_decision === 'IMPROVE' ? 'badge-improve' : 'badge-kill'}">${i.latest_decision}</span>
+                    </div>
+                    <div style="margin-top:0.75rem;">
+                        <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--text-dim); margin-bottom:0.25rem;">
+                            <span>Risk Level</span>
+                            <span style="font-weight:700;">${(10 - (i.latest_score || 0)).toFixed(1)}</span>
+                        </div>
+                        <div style="height:4px; background:var(--border-light); border-radius:999px; overflow:hidden;">
+                            <div style="height:100%; width:${(10 - (i.latest_score || 0)) * 10}%; border-radius:999px; background:var(--${i.latest_score > 7 ? 'go' : i.latest_score > 4 ? 'improve' : 'kill'});"></div>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+
+        <!-- Economics Section -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="margin:0; font-weight:800;">Ecosystem Economics</h3>
+            <span style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Fiscal Strips</span>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:2rem;">
+            <div class="card" style="display:flex; align-items:center; gap:1.5rem; padding:1.5rem;">
+                <div style="width:48px; height:48px; border-radius:12px; background:var(--go-bg); display:flex; align-items:center; justify-content:center; color:var(--go);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </div>
+                <div>
+                    <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Total Monthly Inflow</div>
+                    <div style="font-size:1.5rem; font-weight:800;">₹${totalMonthlyRevenue.toLocaleString('en-IN')}</div>
+                </div>
+            </div>
+            <div class="card" style="display:flex; align-items:center; gap:1.5rem; padding:1.5rem;">
+                <div style="width:48px; height:48px; border-radius:12px; background:var(--kill-bg); display:flex; align-items:center; justify-content:center; color:var(--kill);">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M2 12h20"/><path d="m13 18 6-6-6-6"/></svg>
+                </div>
+                <div>
+                    <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; font-weight:700;">Combined Burn Rate</div>
+                    <div style="font-size:1.5rem; font-weight:800;">₹${totalMonthlyBurn.toLocaleString('en-IN')}</div>
+                </div>
             </div>
         </div>
 
-
-        <!-- KPI Metrics Bar -->
-        <div class="kpi-bar" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:1rem;margin-bottom:2rem">
-            <div class="card kpi-card" style="text-align:center;padding:1.25rem">
-                <div class="text-dim text-xs" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">Total Ideas</div>
-                <div style="font-size:2rem;font-weight:800;color:var(--primary)">${ideas.length}</div>
-            </div>
-            <div class="card kpi-card" style="text-align:center;padding:1.25rem">
-                <div class="text-dim text-xs" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">Avg Score</div>
-                <div style="font-size:2rem;font-weight:800;color:var(--info)">${avgScore}<span style="font-size:0.9rem;color:var(--text-dim)">/10</span></div>
-            </div>
-            <div class="card kpi-card" style="text-align:center;padding:1.25rem">
-                <div class="text-dim text-xs" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">GO</div>
-                <div style="font-size:2rem;font-weight:800;color:var(--go)">${goCount}</div>
-            </div>
-            <div class="card kpi-card" style="text-align:center;padding:1.25rem">
-                <div class="text-dim text-xs" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">IMPROVE</div>
-                <div style="font-size:2rem;font-weight:800;color:var(--improve)">${improveCount}</div>
-            </div>
-            <div class="card kpi-card" style="text-align:center;padding:1.25rem">
-                <div class="text-dim text-xs" style="text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.5rem">KILL</div>
-                <div style="font-size:2rem;font-weight:800;color:var(--kill)">${killCount}</div>
+        <!-- Innovation Assets -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+            <h3 style="margin:0; font-weight:800;">Innovation Assets</h3>
+            <div style="position:relative;">
+                <input type="text" id="dashSearch" placeholder="Filter portfolio..." style="font-size:0.75rem; padding:0.4rem 1rem; border:1px solid var(--border); border-radius:999px; outline:none;">
             </div>
         </div>
-
-        <!-- Decision Distribution Chart (Strategic View) -->
-        ${currentView === 'strategic' && completed.length ? `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:2rem">
-            <div class="card" style="min-height:280px">
-                <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem">Decision Distribution</h3>
-                <div class="chart-wrapper" style="height:220px"><canvas id="decisionDonut"></canvas></div>
-            </div>
-            <div class="card" style="min-height:280px">
-                <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem">Score Distribution</h3>
-                <div class="chart-wrapper" style="height:220px"><canvas id="scoreHistogram"></canvas></div>
-            </div>
-        </div>
-        ` : ''}
-
-        <!-- Risk Heatmap (Strategic View) -->
-        ${currentView === 'strategic' && completed.length ? `
-        <div class="card" style="margin-bottom:2rem">
-            <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem">Risk & Confidence Overview</h3>
-            <div class="risk-heatmap" id="riskHeatmap" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem"></div>
-        </div>
-        ` : ''}
-
-        <!-- Ideas Grid -->
-        <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem">All Ideas</h3>
-        <div class="ideas-grid" id="ideasGrid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(320px, 1fr));gap:1rem">
+        <div class="ideas-grid" id="ideasGrid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:1rem;">
             ${ideas.length === 0 ? emptyState() : ideas.map(i => ideaCard(i)).join('')}
         </div>
         `;
@@ -112,13 +152,13 @@ window.Dashboard = (() => {
 
     function emptyState() {
         return `
-        <div class="card" style="grid-column:1/-1;text-align:center;padding:4rem 2rem">
-            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--primary-light)" stroke-width="1.5" style="margin:0 auto 1rem">
+        <div class="card" style="grid-column:1/-1; text-align:center; padding:4rem 2rem;">
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="var(--primary-light)" stroke-width="1.5" style="margin:0 auto 1rem;">
                 <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
             </svg>
-            <h2 style="font-weight:700;margin-bottom:0.5rem">No ideas yet</h2>
-            <p class="text-dim text-sm" style="max-width:360px;margin:0 auto 1.25rem">Start by creating your first startup idea to validate it with our multi-agent AI system.</p>
-            <button class="btn btn-primary" onclick="location.hash='#/new'">Create First Idea</button>
+            <h2 style="font-weight:700; margin-bottom:0.5rem;">No ideas yet</h2>
+            <p class="text-dim text-sm" style="max-width:360px; margin:0 auto 1.25rem;">Start by creating your first startup idea to validate it with our multi-agent AI system.</p>
+            <button class="btn btn-primary" onclick="window.IdeaApp.showNewIdeaModal()">Create First Idea</button>
         </div>`;
     }
 
@@ -129,40 +169,39 @@ window.Dashboard = (() => {
         const scoreColor = decision === 'GO' ? 'var(--go)' : decision === 'IMPROVE' ? 'var(--improve)' : decision === 'KILL' ? 'var(--kill)' : 'var(--text-dim)';
 
         return `
-        <div class="card idea-card" data-title="${esc(idea.title)}" onclick="location.hash='#/idea/${idea.id}'" style="cursor:pointer;transition:all 0.2s ease;position:relative;overflow:hidden">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.75rem">
-                <div style="font-weight:700;font-size:1rem;line-height:1.3;flex:1;margin-right:0.5rem">${esc(idea.title)}</div>
-                ${decision ? `<span class="decision-badge decision-${decision.toLowerCase()}">${decision}</span>` : `<span class="decision-badge" style="background:var(--bg-alt);color:var(--text-dim)">Draft</span>`}
+        <div class="card idea-card" data-title="${esc(idea.title)}" onclick="location.hash='#/idea/${idea.id}'" style="cursor:pointer; transition:all 0.2s ease; position:relative; overflow:hidden;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:0.75rem;">
+                <div style="font-weight:700; font-size:1rem; line-height:1.3; flex:1; margin-right:0.5rem;">${esc(idea.title)}</div>
+                ${decision ? `<span class="badge ${decision === 'GO' ? 'badge-go' : decision === 'IMPROVE' ? 'badge-improve' : 'badge-kill'}">${decision}</span>` : `<span class="badge badge-draft">Draft</span>`}
             </div>
-            <p class="text-dim text-sm" style="margin-bottom:1rem;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(idea.description || '')}</p>
+            <p class="text-dim text-sm" style="margin-bottom:1rem; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">${esc(idea.description || '')}</p>
             
             ${score != null ? `
-            <div style="margin-bottom:0.5rem">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem">
+            <div style="margin-bottom:0.5rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.25rem;">
                     <span class="text-xs text-dim">Validation Score</span>
-                    <span style="font-weight:800;color:${scoreColor};font-size:1.1rem">${score.toFixed(1)}</span>
+                    <span style="font-weight:800; color:${scoreColor}; font-size:1.1rem;">${score.toFixed(1)}</span>
                 </div>
-                <div style="height:6px;background:var(--bg-alt);border-radius:999px;overflow:hidden">
-                    <div style="height:100%;width:${score * 10}%;background:${scoreColor};border-radius:999px;transition:width 0.5s ease"></div>
+                <div style="height:6px; background:var(--bg-panel); border-radius:999px; overflow:hidden;">
+                    <div style="height:100%; width:${score * 10}%; background:${scoreColor}; border-radius:999px; transition:width 0.5s ease;"></div>
                 </div>
             </div>
             ` : ''}
 
-            <!-- Execution Velocity Metrics -->
-            <div style="display:flex;gap:0.5rem;margin-top:0.75rem;margin-bottom:0.5rem">
-                <div style="flex:1;background:var(--bg-alt);padding:0.4rem;border-radius:6px;text-align:center">
-                    <div class="text-xs text-dim" style="margin-bottom:0.15rem">Tasks Done</div>
-                    <div style="font-weight:700;font-size:0.85rem">${idea.tasks_completed || 0}/${idea.tasks_total || 0}</div>
+            <div style="display:flex; gap:0.5rem; margin-top:0.75rem; margin-bottom:0.5rem;">
+                <div style="flex:1; background:var(--bg-main); padding:0.4rem; border-radius:6px; text-align:center;">
+                    <div class="text-xs text-dim" style="margin-bottom:0.15rem;">Tasks</div>
+                    <div style="font-weight:700; font-size:0.85rem;">${idea.tasks_completed || 0}/${idea.tasks_total || 0}</div>
                 </div>
-                <div style="flex:1;background:var(--bg-alt);padding:0.4rem;border-radius:6px;text-align:center">
-                    <div class="text-xs text-dim" style="margin-bottom:0.15rem">Real Tests</div>
-                    <div style="font-weight:700;font-size:0.85rem">${idea.experiments_total || 0}</div>
+                <div style="flex:1; background:var(--bg-main); padding:0.4rem; border-radius:6px; text-align:center;">
+                    <div class="text-xs text-dim" style="margin-bottom:0.15rem;">Tests</div>
+                    <div style="font-weight:700; font-size:0.85rem;">${idea.experiments_total || 0}</div>
                 </div>
             </div>
             
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.75rem">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.75rem;">
                 <span class="text-xs text-dim">${date}</span>
-                <span class="text-xs" style="color:var(--primary);font-weight:600">${idea.status === 'validating' ? '⏳ Validating…' : idea.validation_count > 0 ? `${idea.validation_count} iteration${idea.validation_count > 1 ? 's' : ''}` : 'Not validated'}</span>
+                <span class="text-xs" style="color:var(--primary); font-weight:600;">${idea.status === 'validating' ? '⏳ Validating…' : idea.validation_count > 0 ? `${idea.validation_count} iterations` : 'Draft'}</span>
             </div>
         </div>`;
     }
@@ -179,109 +218,6 @@ window.Dashboard = (() => {
                 });
             });
         }
-
-        // View toggle
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                currentView = btn.dataset.view;
-                render();
-            });
-        });
-
-        // Charts
-        const completed = ideas.filter(i => i.status === 'completed');
-        if (currentView === 'strategic' && completed.length) {
-            renderDecisionDonut(completed);
-            renderScoreHistogram(completed);
-            renderRiskHeatmap(completed);
-        }
-    }
-
-    function renderDecisionDonut(completed) {
-        const ctx = document.getElementById('decisionDonut');
-        if (!ctx) return;
-        const go = completed.filter(i => i.latest_decision === 'GO').length;
-        const improve = completed.filter(i => i.latest_decision === 'IMPROVE').length;
-        const kill = completed.filter(i => i.latest_decision === 'KILL').length;
-
-        new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: ['GO', 'IMPROVE', 'KILL'],
-                datasets: [{
-                    data: [go, improve, kill],
-                    backgroundColor: ['#10b981', '#f59e0b', '#ef4444'],
-                    borderWidth: 0,
-                    borderRadius: 4,
-                }],
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                cutout: '65%',
-                plugins: {
-                    legend: { position: 'bottom', labels: { color: '#0f172a', font: { size: 12, weight: '600' }, padding: 16 } },
-                },
-            },
-        });
-    }
-
-    function renderScoreHistogram(completed) {
-        const ctx = document.getElementById('scoreHistogram');
-        if (!ctx) return;
-        const buckets = Array(10).fill(0);
-        completed.forEach(i => {
-            const idx = Math.min(Math.floor(i.latest_score || 0), 9);
-            buckets[idx]++;
-        });
-
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['0-1', '1-2', '2-3', '3-4', '4-5', '5-6', '6-7', '7-8', '8-9', '9-10'],
-                datasets: [{
-                    label: 'Ideas',
-                    data: buckets,
-                    backgroundColor: buckets.map((_, i) => i < 6 ? '#fee2e2' : i < 8 ? '#fef3c7' : '#d1fae5'),
-                    borderColor: buckets.map((_, i) => i < 6 ? '#ef4444' : i < 8 ? '#f59e0b' : '#10b981'),
-                    borderWidth: 1, borderRadius: 6,
-                }],
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
-                    y: { beginAtZero: true, ticks: { stepSize: 1, color: '#64748b' }, grid: { color: 'rgba(0,0,0,0.05)' } },
-                },
-            },
-        });
-    }
-
-    function renderRiskHeatmap(completed) {
-        const el = document.getElementById('riskHeatmap');
-        if (!el) return;
-        el.innerHTML = completed.map(idea => {
-            const score = idea.latest_score || 0;
-            const risk = 10 - score; // approximate risk from score
-            const confidence = 50 + score * 5; // approximate confidence
-            const riskColor = risk > 6 ? '#ef4444' : risk > 3 ? '#f59e0b' : '#10b981';
-            const confColor = confidence > 70 ? '#10b981' : confidence > 50 ? '#f59e0b' : '#ef4444';
-
-            return `
-                <div style="padding:1rem;border-radius:var(--radius);border:1px solid var(--border-light);cursor:pointer;transition:all 0.2s" onclick="location.hash='#/idea/${idea.id}'" onmouseover="this.style.borderColor='var(--primary-light)'" onmouseout="this.style.borderColor='var(--border-light)'">
-                <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(idea.title)}</div>
-                <div style="display:flex;gap:0.75rem">
-                    <div style="flex:1">
-                        <div class="text-xs text-dim" style="margin-bottom:0.25rem">Risk</div>
-                        <div style="height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden"><div style="height:100%;width:${risk * 10}%;background:${riskColor};border-radius:4px"></div></div>
-                    </div>
-                    <div style="flex:1">
-                        <div class="text-xs text-dim" style="margin-bottom:0.25rem">Confidence</div>
-                        <div style="height:8px;background:#f1f5f9;border-radius:4px;overflow:hidden"><div style="height:100%;width:${confidence}%;background:${confColor};border-radius:4px"></div></div>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
     }
 
     function esc(str) {

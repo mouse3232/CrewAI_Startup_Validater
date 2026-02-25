@@ -68,8 +68,45 @@ window.Journal = (() => {
     }
 
     function showNewEntryModal() {
-        app().toast('Journal entry modal coming soon!', 'info');
+        const modal = document.getElementById('newJournalModal');
+        if (modal) modal.classList.add('open');
+        const input = document.getElementById('journal-content');
+        if (input) input.focus();
     }
 
-    return { init, showNewEntryModal };
+    function closeModal() {
+        const modal = document.getElementById('newJournalModal');
+        if (modal) modal.classList.remove('open');
+        // Reset form
+        const form = modal.querySelector('form');
+        if (form) form.reset();
+    }
+
+    async function submitNewEntry(event) {
+        event.preventDefault();
+        const content = document.getElementById('journal-content').value.trim();
+        const tagsRaw = document.getElementById('journal-tags').value.trim();
+        const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()) : [];
+
+        if (!content) return;
+
+        try {
+            await app().apiFetch(`/ideas/${currentIdeaId}/journal`, {
+                method: 'POST',
+                body: JSON.stringify({ content, tags })
+            });
+
+            closeModal();
+            app().toast('Entry saved to your journal', 'success');
+
+            // Refresh journal
+            const container = document.getElementById('tabContent-journal');
+            if (container) init(currentIdeaId, 'tabContent-journal');
+
+        } catch (err) {
+            app().toast(`Failed to save journal entry: ${err.message}`, 'error');
+        }
+    }
+
+    return { init, showNewEntryModal, closeModal, submitNewEntry };
 })();

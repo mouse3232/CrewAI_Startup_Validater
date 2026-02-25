@@ -8,30 +8,56 @@ window.IdeaDetail = (() => {
     let charts = {};
     let currentIdeaId = null;
 
-    async function render(ideaId) {
+    async function render(ideaId, requestedTab = 'validation') {
         currentIdeaId = ideaId;
         const el = $content();
         el.innerHTML = '<div style="text-align:center;padding:4rem"><div class="spinner" style="margin:0 auto"></div><p class="text-dim mt-2">Loading idea…</p></div>';
 
         let idea;
+        let tabs = [];
         try {
             idea = await app().api.getIdea(ideaId);
+            tabs = await app().api.getTabs(ideaId);
         } catch (err) {
             el.innerHTML = `<div class="card" style="text-align:center; padding: 4rem;"><h2>Idea not found</h2><p class="text-dim">${err.message}</p><a href="#/" class="btn btn-outline mt-2">Back to Dashboard</a></div>`;
             return;
         }
 
+        // Mapping route aliases to tab IDs
+        const tabMap = {
+            'execution': 'tasks',
+            'tests': 'experiments'
+        };
+        const targetTab = tabMap[requestedTab] || requestedTab;
+
+        // Start collaboration sync
+        if (window.Collaboration) {
+            window.Collaboration.startSync(ideaId);
+        }
+
         const v = idea.validations && idea.validations[0];
         const analytics = idea.scoring_analytics || null;
-        el.innerHTML = buildPage(idea, v, analytics);
+        window.currentIdeaData = idea; // Store for workspace editing
+        el.innerHTML = buildPage(idea, v, analytics, tabs);
 
         if (v) {
             renderCharts(v);
+            loadPersistentActivity(v.id);
+        }
+
+        // Switch to requested tab
+        switchTab(targetTab);
+
+        // Initialize global sticky notes layer
+        if (window.StickyNotes) {
+            window.StickyNotes.init(ideaId);
         }
     }
 
-    function buildPage(idea, v, analytics) {
+    function buildPage(idea, v, analytics, tabs) {
         const hasVal = !!v;
+        // Store globally for workspace rendering
+        window.currentWorkspaceTabs = tabs;
         return `
             <div class="detail-header">
                 <a href="#/" class="detail-back" title="Back to Dashboard">
@@ -64,7 +90,6 @@ window.IdeaDetail = (() => {
                 </div>
             </div>
 
-            <p class="text-dim mb-3" style="max-width:800px; font-size: 1.05rem;">${esc(idea.description)}</p>
 
             <!-- Dynamic Progress Tracker -->
             <div id="progressStepperContainer" style="display:none">
@@ -76,21 +101,95 @@ window.IdeaDetail = (() => {
                     <div class="step-item" id="step-exec"><div class="step-circle">5</div><div class="step-label">Exec Summary</div></div>
                 </div>
             </div>
-            <div class="view-tabs" style="display:flex; gap:1rem; border-bottom:1px solid var(--border-light); margin-bottom:1.5rem; justify-content:flex-start; overflow-x:auto">
-                <button class="view-btn active" data-tab="validation" onclick="window.IdeaDetail.switchTab('validation')" style="padding:0.75rem 1rem; border:none; background:transparent; font-weight:700; color:var(--primary); border-bottom:2px solid var(--primary); cursor:pointer">Validation Report</button>
-                <button class="view-btn" data-tab="tasks" onclick="window.IdeaDetail.switchTab('tasks')" style="padding:0.75rem 1rem; border:none; background:transparent; font-weight:600; color:var(--text-dim); border-bottom:2px solid transparent; cursor:pointer">Tasks & Execution</button>
-                <button class="view-btn" data-tab="journal" onclick="window.IdeaDetail.switchTab('journal')" style="padding:0.75rem 1rem; border:none; background:transparent; font-weight:600; color:var(--text-dim); border-bottom:2px solid transparent; cursor:pointer">Execution Journal</button>
-                <button class="view-btn" data-tab="experiments" onclick="window.IdeaDetail.switchTab('experiments')" style="padding:0.75rem 1rem; border:none; background:transparent; font-weight:600; color:var(--text-dim); border-bottom:2px solid transparent; cursor:pointer">Real-World Tests</button>
-            </div>
 
             <div id="tabContent-validation" class="tab-pane active" style="display:block">
                 <div id="validationResultsArea">
                     ${hasVal ? renderValidationResults(v, analytics) : renderValidationPrompt()}
                 </div>
             </div>
+            <div id="tabContent-workspace" class="tab-pane" style="display:none">
+                <div id="workspaceContainer">
+                    <!-- Dynamic Workspace content generated via JS -->
+                </div>
+            </div>
+            <div id="tabContent-financials" class="tab-pane" style="display:none"></div>
+            <div id="tabContent-risks" class="tab-pane" style="display:none"></div>
             <div id="tabContent-tasks" class="tab-pane" style="display:none"></div>
+            <div id="tabContent-meetings" class="tab-pane" style="display:none"></div>
+            <div id="tabContent-expenses" class="tab-pane" style="display:none"></div>
             <div id="tabContent-journal" class="tab-pane" style="display:none"></div>
             <div id="tabContent-experiments" class="tab-pane" style="display:none"></div>
+            
+            ${hasVal ? renderChatWidget(v.id) : ''}
+        `;
+    }
+
+    function renderVersionSelector(idea) {
+        if (!idea.validations || idea.validations.length <= 1) return '';
+        const options = idea.validations.map((val, idx) =>
+            `<option value="${val.id}">Iteration #${val.iteration} - ${app().formatDate(val.created_at)}</option>`
+        ).join('');
+        return `
+            <select class="form-control" style="width: auto; height: 32px; padding: 0 0.5rem; font-size: 0.85rem;" onchange="window.IdeaDetail.switchVersion(this.value)">
+                ${options}
+            </select>
+        `;
+    }
+
+    function renderChatWidget(valId) {
+        return `
+            <style>
+                .chat-widget-toggle { position: fixed; bottom: 2rem; right: 2rem; width: 62px; height: 62px; border-radius: 50%; background: var(--primary); color: white; border: none; box-shadow: 0 8px 16px rgba(0,0,0,0.2); cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 1000; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+                .chat-widget-toggle:hover { transform: scale(1.1) translateY(-2px); box-shadow: 0 12px 20px rgba(0,0,0,0.25); }
+                .chat-widget-panel { position: fixed; bottom: 95px; right: 2rem; width: 380px; max-width: calc(100vw - 4rem); height: 550px; max-height: calc(100vh - 140px); background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 15px 35px rgba(0,0,0,0.15); display: flex; flex-direction: column; overflow: hidden; z-index: 1000; opacity: 0; transform: translateY(30px) scale(0.95); transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none; }
+                .chat-widget-panel.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: all; }
+                .chat-widget-header { padding: 1.25rem; background: var(--primary); color: white; display: flex; justify-content: space-between; align-items: center; }
+                .chat-widget-header h4 { margin: 0; font-size: 1rem; display: flex; align-items: center; gap: 0.6rem; color: white; letter-spacing: -0.01em; }
+                .chat-widget-close { background: rgba(255,255,255,0.2); border: none; width: 28px; height: 28px; border-radius: 50%; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
+                .chat-widget-close:hover { background: rgba(255,255,255,0.3); }
+                .chat-widget-messages { flex: 1; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; background: var(--bg-main); }
+                .chat-message { max-width: 88%; padding: 0.85rem 1.1rem; border-radius: 14px; font-size: 0.9rem; line-height: 1.5; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+                .chat-message.user { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 2px; font-weight: 500; }
+                .chat-message.assistant { align-self: flex-start; background: var(--card-bg); border: 1px solid var(--border-light); color: var(--text); border-bottom-left-radius: 2px; }
+                .chat-widget-input-area { padding: 1.25rem; border-top: 1px solid var(--border-light); background: var(--card-bg); }
+                .chat-widget-input { display: flex; gap: 0.75rem; }
+                .chat-widget-input input { flex: 1; padding: 0.65rem 1rem; border: 1px solid var(--border); border-radius: 8px; outline: none; background: var(--bg-main); color: var(--text); font-size: 0.9rem; }
+                .chat-widget-input input:focus { border-color: var(--primary); }
+                .chat-widget-input button { background: var(--primary); color: white; border: none; border-radius: 8px; width: 42px; height: 42px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: opacity 0.2s; }
+                .chat-widget-input button:hover { opacity: 0.9; }
+                .chat-rebuild-area { margin-top: 1rem; border-top: 1px dashed var(--border-light); padding-top: 1rem; }
+            </style>
+            
+            <button class="chat-widget-toggle" onclick="window.IdeaDetail.toggleChatWidget(${valId})" title="Ask AI about this report">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+            </button>
+            
+            <div class="chat-widget-panel" id="chatWidgetPanel">
+                <div class="chat-widget-header">
+                    <h4>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        Strategic AI Assistant
+                    </h4>
+                    <button class="chat-widget-close" onclick="window.IdeaDetail.toggleChatWidget(${valId})">&times;</button>
+                </div>
+                <div class="chat-widget-messages" id="chatWidgetMessages">
+                    <div class="text-dim text-xs text-center">Chat session opened</div>
+                </div>
+                <div class="chat-widget-input-area">
+                    <div class="chat-widget-input">
+                        <input type="text" id="chatWidgetInput" placeholder="Ask about this validation..." onkeypress="if(event.key === 'Enter') window.IdeaDetail.sendChatMessage(${valId})">
+                        <button onclick="window.IdeaDetail.sendChatMessage(${valId})" id="chatWidgetSendBtn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        </button>
+                    </div>
+                    <div class="chat-rebuild-area">
+                        <button class="btn btn-outline btn-sm w-100" onclick="window.IdeaDetail.promptRebuild()" style="font-weight:700; border-style:dashed;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                            Pivot & Rebuild Strategy
+                        </button>
+                    </div>
+                </div>
+            </div>
         `;
     }
 
@@ -110,88 +209,122 @@ window.IdeaDetail = (() => {
 
     function renderValidationResults(v, analytics) {
         return `
-            <!-- Executive Summary -->
-            <div class="card mt-2 mb-3">
-                ${renderExecutiveSummary(v.executive_summary)}
+            <div class="sub-tabs mb-3" style="display:flex; gap:1.5rem; border-bottom:1px solid var(--border-light); justify-content:flex-start;">
+                <button class="sub-tab-btn active" data-subtab="val-summary" onclick="window.IdeaDetail.switchSubTab('val-summary')">Summary</button>
+                <button class="sub-tab-btn" data-subtab="val-canvas" onclick="window.IdeaDetail.switchSubTab('val-canvas')">Business Canvas</button>
+                <button class="sub-tab-btn" data-subtab="val-agents" onclick="window.IdeaDetail.switchSubTab('val-agents')">Agent Deep Dives</button>
+                <button class="sub-tab-btn" data-subtab="val-analytics" onclick="window.IdeaDetail.switchSubTab('val-analytics')">Intelligence & Charts</button>
+                <button class="sub-tab-btn" data-subtab="val-roadmap" onclick="window.IdeaDetail.switchSubTab('val-roadmap')">Execution Roadmap</button>
             </div>
 
-            <!-- Score overview -->
-            <div class="detail-scores">
-                <div class="card score-card">
-                    <div class="score-card-value" style="color:var(--${app().decisionClass(v.decision)})">${(v.final_score || 0).toFixed(1)}<span style="font-size:1rem;color:var(--text-muted)">/10</span></div>
-                    <div class="score-card-label">Final Score</div>
+            <!-- Summary Tab -->
+            <div id="subtab-val-summary" class="subtab-pane active" style="display:block">
+                <div class="card mt-2 mb-3" style="margin-bottom: 2.5rem !important;">
+                    ${renderExecutiveSummary(v.executive_summary, v.id)}
                 </div>
-                <div class="card score-card">
-                    <div class="score-card-value">${v.decision || '—'}</div>
-                    <div class="score-card-label">Decision</div>
+                <div class="detail-scores">
+                    <div class="card score-card" title="Weighted average of all agent evaluations.">
+                        <div class="score-card-value" style="color:var(--${app().decisionClass(v.decision)})">${(v.final_score || 0).toFixed(1)}<span style="font-size:1rem;color:var(--text-muted)">/10</span></div>
+                        <div class="score-card-label">Final Score</div>
+                    </div>
+                    <div class="card score-card" title="Strategic decision based on score threshold and risk profile.">
+                        <div class="score-card-value">${v.decision || '—'}</div>
+                        <div class="score-card-label">Decision</div>
+                    </div>
+                    <div class="card score-card" title="Statistical certainty of the AI agents' consensus.">
+                        <div class="score-card-value" style="color:var(--info)">${(v.confidence_index || 0).toFixed(0)}%</div>
+                        <div class="score-card-label">AI Confidence</div>
+                    </div>
+                    <div class="card score-card" title="Current number of refinement cycles applied.">
+                        <div class="score-card-value" style="color:var(--primary)">#${v.iteration || 1}</div>
+                        <div class="score-card-label">Refinement Iteration</div>
+                    </div>
                 </div>
-                <div class="card score-card">
-                    <div class="score-card-value" style="color:var(--info)">${(v.confidence_index || 0).toFixed(0)}%</div>
-                    <div class="score-card-label">AI Confidence</div>
+                ${app().scoreBarHTML(v.final_score, v.decision)}
+            </div>
+
+            <!-- Canvas Tab -->
+            <div id="subtab-val-canvas" class="subtab-pane" style="display:none">
+                <div class="flex mb-2" style="justify-content:space-between; align-items:flex-end">
+                    <h3 class="fw-700 m-0" style="font-size:1.25rem">Business Validation Canvas</h3>
+                    <div class="flex gap-sm">
+                        <button class="btn btn-primary btn-sm" onclick="window.StickyNotes && window.StickyNotes.createEmptySticky()" style="font-size:0.75rem; background:#fbbf24; color:#78350f; border:none;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3" ry="3"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                            Add Note
+                        </button>
+                        <button class="btn btn-outline btn-sm" onclick="window.IdeaDetail.exportPDF()" style="font-size:0.75rem">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Export PDF
+                        </button>
+                    </div>
                 </div>
-                <div class="card score-card">
-                    <div class="score-card-value" style="color:var(--primary)">#${v.iteration || 1}</div>
-                    <div class="score-card-label">Refinement Iteration</div>
+                ${renderCanvas(v.structured_idea)}
+            </div>
+
+            <!-- Agents Tab -->
+            <div id="subtab-val-agents" class="subtab-pane" style="display:none">
+                <h3 class="fw-700 mb-2" style="font-size:1.25rem">Agent Deep Dives</h3>
+                <div class="agent-sections" id="agentSections">
+                    ${renderAgentSections(v.agent_outputs)}
                 </div>
             </div>
 
-            ${app().scoreBarHTML(v.final_score, v.decision)}
+            <!-- Analytics Tab -->
+            <div id="subtab-val-analytics" class="subtab-pane" style="display:none">
+                ${analytics && analytics.scenario_scores ? renderScenarioCards(analytics.scenario_scores) : ''}
+                ${analytics && analytics.weighted_breakdown ? renderWeightedBreakdown(analytics.weighted_breakdown) : ''}
+                ${analytics && analytics.sensitivity ? renderSensitivity(analytics.sensitivity) : ''}
 
-            <!-- Scenario Simulation -->
-            ${analytics && analytics.scenario_scores ? renderScenarioCards(analytics.scenario_scores) : ''}
-
-            <!-- Weighted Breakdown -->
-            ${analytics && analytics.weighted_breakdown ? renderWeightedBreakdown(analytics.weighted_breakdown) : ''}
-
-            <!-- Sensitivity Analysis -->
-            ${analytics && analytics.sensitivity ? renderSensitivity(analytics.sensitivity) : ''}
-
-            <!-- Charts -->
-            <div class="detail-grid mt-3">
-                <div class="card chart-card">
-                    <h3>Dimension Scores</h3>
-                    <div class="chart-wrapper"><canvas id="radarChart"></canvas></div>
-                </div>
-                <div class="card chart-card">
-                    <h3>Weighted Contribution</h3>
-                    <div class="chart-wrapper"><canvas id="barChart"></canvas></div>
-                </div>
-                <div class="card chart-card">
-                    <h3>Confidence Gauge</h3>
-                    <div class="chart-wrapper"><canvas id="gaugeChart"></canvas></div>
-                </div>
-                <div class="card chart-card">
-                    <h3>Score Evolution</h3>
-                    <div class="chart-wrapper"><canvas id="evolutionChart"></canvas></div>
+                <div class="detail-grid mt-3">
+                    <div class="card chart-card">
+                        <h3>Dimension Scores</h3>
+                        <div class="chart-wrapper"><canvas id="radarChart"></canvas></div>
+                    </div>
+                    <div class="card chart-card">
+                        <h3>Weighted Contribution</h3>
+                        <div class="chart-wrapper"><canvas id="barChart"></canvas></div>
+                    </div>
+                    <div class="card chart-card">
+                        <h3>Confidence Gauge</h3>
+                        <div class="chart-wrapper"><canvas id="gaugeChart"></canvas></div>
+                    </div>
+                    <div class="card chart-card">
+                        <h3>Score Evolution</h3>
+                        <div class="chart-wrapper"><canvas id="evolutionChart"></canvas></div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Business Model Canvas -->
-            <div class="flex mt-3 mb-2" style="justify-content:space-between; align-items:flex-end">
-                <h3 class="fw-700 m-0" style="font-size:1.25rem">Business Validation Canvas</h3>
-                <div class="flex gap-sm">
-                    <span class="text-sm text-dim">Interactive Strategy Workboard</span>
-                    <button class="btn btn-outline btn-sm" onclick="window.IdeaDetail.exportPDF()" style="font-size:0.75rem">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Export PDF
-                    </button>
-                </div>
+            <!-- Roadmap Tab -->
+            <div id="subtab-val-roadmap" class="subtab-pane" style="display:none">
+                ${renderRoadmap()}
             </div>
-            ${renderCanvas(v.structured_idea)}
-
-            <!-- Agent Sections -->
-            <h3 class="fw-700 mt-3 mb-2" style="font-size:1.25rem">Agent Deep Dives</h3>
-            <div class="agent-sections" id="agentSections">
-                ${renderAgentSections(v.agent_outputs)}
-            </div>
-
+            
             <!-- Refinement Timeline -->
             ${v.refinement_history && v.refinement_history.length ? renderTimeline(v.refinement_history) : ''}
         `;
     }
 
-    function renderExecutiveSummary(exec) {
-        if (!exec || typeof exec !== 'object') return '';
+    function renderExecutiveSummary(exec, valId) {
+        // Handle loading/missing states
+        if (!exec || !exec.executive_summary || exec.executive_summary.includes('failed')) {
+            return `
+                <div class="exec-summary" style="text-align:center; padding: 1.5rem;">
+                    <div style="font-size: 2rem; margin-bottom: 1rem;">📝</div>
+                    <h3 style="margin-bottom: 0.5rem;">Strategic Summary Pending</h3>
+                    <p class="text-dim mb-3">The AI is still synthesizing the strategic analysis or the last attempt failed.</p>
+                    <button class="btn btn-primary" id="retrySummaryBtn" onclick="window.IdeaDetail.regenerateSummary(${valId})">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 8px;"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        Generate Strategic Summary
+                    </button>
+                    <div id="summaryLoading" style="display:none; margin-top: 1rem;">
+                        <div class="spinner" style="margin: 0 auto 0.5rem auto; width: 24px; height: 24px;"></div>
+                        <span class="text-xs text-dim">AI is analyzing all agent outputs (Tier 1 Reasoning)...</span>
+                    </div>
+                </div>
+            `;
+        }
+
         const summary = exec.executive_summary || '';
         const strengths = exec.strengths || [];
         const weaknesses = exec.weaknesses || [];
@@ -199,18 +332,42 @@ window.IdeaDetail = (() => {
 
         return `
             <div class="exec-summary">
-                <h3 class="flex gap-sm" style="align-items:center;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    Executive Summary
-                </h3>
-                <p class="mt-1 text-dim" style="font-size:1.05rem">${esc(summary)}</p>
-                <div class="mt-2" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
-                    ${strengths.length ? `<div><h4 class="text-sm fw-700" style="color:var(--go); border-bottom: 1px solid var(--border-light); padding-bottom: 0.25rem">Key Strengths</h4><ul class="exec-list">${strengths.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
-                    ${weaknesses.length ? `<div><h4 class="text-sm fw-700" style="color:var(--kill); border-bottom: 1px solid var(--border-light); padding-bottom: 0.25rem">Critical Risks</h4><ul class="exec-list">${weaknesses.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
-                    ${recommendations.length ? `<div><h4 class="text-sm fw-700" style="color:var(--info); border-bottom: 1px solid var(--border-light); padding-bottom: 0.25rem">Strategic Recommendations</h4><ul class="exec-list">${recommendations.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 1rem;">
+                    <h3 class="flex gap-sm" style="align-items:center; margin: 0;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Executive Summary
+                    </h3>
+                    <button class="btn btn-outline btn-sm" onclick="window.IdeaDetail.regenerateSummary(${valId})" title="Refresh AI summary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                </div>
+                <p class="mt-1 text-dim" style="font-size:1.05rem; line-height: 1.6;">${esc(summary)}</p>
+                <div class="mt-2" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem;">
+                    ${strengths.length ? `<div><h4 class="text-xs fw-800" style="color:var(--go); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">● Key Strengths</h4><ul class="exec-list">${strengths.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+                    ${weaknesses.length ? `<div><h4 class="text-xs fw-800" style="color:var(--kill); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">● Critical Risks</h4><ul class="exec-list">${weaknesses.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+                    ${recommendations.length ? `<div><h4 class="text-xs fw-800" style="color:var(--info); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">● Strategic Roadmap</h4><ul class="exec-list">${recommendations.map(s => `<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
                 </div>
             </div>
         `;
+    }
+
+    async function regenerateSummary(valId) {
+        const btn = document.getElementById('retrySummaryBtn');
+        const loader = document.getElementById('summaryLoading');
+        if (btn) btn.style.display = 'none';
+        if (loader) loader.style.display = 'block';
+
+        try {
+            await app().apiFetch(`/validations/${valId}/summarize`, { method: 'POST' });
+
+            // Refresh the whole page to show new summary and update metrics
+            await render(currentIdeaId);
+            app().toast('Strategic summary regenerated successfully', 'success');
+        } catch (err) {
+            app().toast('Failed to generate summary: ' + err.message, 'error');
+            if (btn) btn.style.display = 'inline-flex';
+            if (loader) loader.style.display = 'none';
+        }
     }
 
     // ── Scenario Simulation Cards ─────────────────────────────
@@ -392,13 +549,23 @@ window.IdeaDetail = (() => {
             }
             const kvPairs = Object.entries(data).map(([k, v]) => {
                 const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                let val = v;
-                if (Array.isArray(v)) {
-                    val = v.map(item => typeof item === 'object' ? JSON.stringify(item) : String(item)).join(', ');
-                } else if (typeof v === 'object' && v !== null) {
-                    val = JSON.stringify(v);
-                }
-                return `<dt>${esc(label)}</dt><dd>${esc(String(val))}</dd>`;
+
+                const formatValue = (val) => {
+                    if (val === null || val === undefined) return '—';
+                    if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+                    if (Array.isArray(val)) {
+                        if (val.length === 0) return 'None';
+                        return `<ul class="agent-val-list">${val.map(item => `<li>${formatValue(item)}</li>`).join('')}</ul>`;
+                    }
+                    if (typeof val === 'object') {
+                        return Object.entries(val).map(([subK, subV]) =>
+                            `<div class="agent-val-sub"><span class="text-dim">${subK.replace(/_/g, ' ')}:</span> ${formatValue(subV)}</div>`
+                        ).join('');
+                    }
+                    return esc(String(val));
+                };
+
+                return `<dt>${esc(label)}</dt><dd>${formatValue(v)}</dd>`;
             }).join('');
 
             return `
@@ -435,6 +602,70 @@ window.IdeaDetail = (() => {
                             <span class="text-dim">(${h.prev_score.toFixed(2)} → ${h.new_score.toFixed(2)})</span>
                         </div>
                     `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    function renderRoadmap() {
+        const phases = [
+            { id: 'ideation', label: 'Ideation', icon: '💡', status: 'completed', desc: 'Concept clear' },
+            { id: 'validation', label: 'Validation', icon: '⚖️', status: 'active', desc: 'Current: Market/Tech proof' },
+            { id: 'business', label: 'Business Model', icon: '💰', status: 'pending', desc: 'Unit economics & pricing' },
+            { id: 'gtm', label: 'GTM Strategy', icon: '📈', status: 'pending', desc: 'Market entry & acquisition' },
+            { id: 'scaling', label: 'Scaling', icon: '🚀', status: 'pending', desc: 'Growth & infrastructure' },
+            { id: 'maturity', label: 'Maturity', icon: '🏢', status: 'pending', desc: 'Optimization & exit' }
+        ];
+
+        return `
+            <div class="card" style="padding:2rem; overflow-x:auto;">
+                <h3 style="margin-bottom:2rem; text-align:center; font-weight:800; font-size:1.5rem;">Strategic Execution Roadmap</h3>
+                
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; min-width:800px; position:relative; padding-top:2rem;">
+                    <!-- Connector Line -->
+                    <div style="position:absolute; top:calc(2rem + 24px); left:50px; right:50px; height:4px; background:var(--border-light); z-index:1;">
+                        <div style="height:100%; width:20%; background:var(--go); border-radius:999px;"></div>
+                    </div>
+
+                    ${phases.map((p, idx) => {
+            const isActive = p.status === 'active';
+            const isDone = p.status === 'completed';
+            const color = isActive ? 'var(--info)' : isDone ? 'var(--go)' : 'var(--text-muted)';
+            const bgColor = isActive ? 'var(--info-bg)' : isDone ? 'var(--go-bg)' : 'var(--bg-panel)';
+            const borderColor = isActive ? 'var(--info)' : isDone ? 'var(--go)' : 'var(--border)';
+
+            return `
+                        <div style="display:flex; flex-direction:column; align-items:center; width:120px; position:relative; z-index:2;">
+                            <div style="width:48px; height:48px; border-radius:50%; background:${bgColor}; border:2px solid ${borderColor}; display:flex; align-items:center; justify-content:center; font-size:1.25rem; margin-bottom:1rem; box-shadow:${isActive ? '0 0 15px rgba(59,130,246,0.3)' : 'none'};">
+                                ${p.icon}
+                            </div>
+                            <div style="font-weight:700; font-size:0.85rem; color:${isActive ? 'var(--primary)' : 'var(--text-dim)'}; text-align:center; margin-bottom:0.25rem;">${p.label}</div>
+                            <div style="font-size:0.7rem; color:var(--text-muted); text-align:center; line-height:1.2;">${p.desc}</div>
+                            ${isActive ? '<span class="badge badge-info" style="margin-top:0.75rem; font-size:0.6rem;">CURRENT STAGE</span>' : ''}
+                        </div>
+                        `;
+        }).join('')}
+                </div>
+
+                <div class="grid grid-3 gap-2 mt-3" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:1rem; margin-top:3rem;">
+                    <div class="card" style="background:var(--info-bg); border-left:4px solid var(--info); padding:1rem;">
+                        <h4 class="text-xs fw-800 uppercase" style="color:var(--info); margin-bottom:0.5rem; font-size:0.75rem;">Next Milestones</h4>
+                        <ul class="exec-list mb-0" style="padding-left:1.25rem;">
+                            <li class="text-xs">Define detailed unit economics</li>
+                            <li class="text-xs">Develop GTM acquisition funnel</li>
+                            <li class="text-xs">Set up experimental landing page</li>
+                        </ul>
+                    </div>
+                    <div class="card" style="padding:1rem;">
+                        <h4 class="text-xs fw-800 uppercase" style="color:var(--primary); margin-bottom:0.5rem; font-size:0.75rem;">Time to Market</h4>
+                        <div style="font-size:1.5rem; font-weight:800;">4-6 Months</div>
+                        <p class="text-xs text-dim">Projected based on current tech feasibility.</p>
+                    </div>
+                    <div class="card" style="padding:1rem;">
+                        <h4 class="text-xs fw-800 uppercase" style="color:var(--primary); margin-bottom:0.5rem; font-size:0.75rem;">Resource Intensity</h4>
+                        <div style="font-size:1.5rem; font-weight:800;">Medium</div>
+                        <p class="text-xs text-dim">Requires 2 devs + 1 marketing lead.</p>
+                    </div>
                 </div>
             </div>
         `;
@@ -717,11 +948,11 @@ window.IdeaDetail = (() => {
         }
     }
 
-    function logActivity(msg, type) {
+    function logActivity(msg, type, timeOverride = null) {
         const drawer = document.getElementById('drawerContent');
         if (!drawer) return;
 
-        const d = new Date();
+        const d = timeOverride ? new Date(timeOverride) : new Date();
         const timeStr = d.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
         const entry = document.createElement('div');
@@ -730,6 +961,26 @@ window.IdeaDetail = (() => {
 
         drawer.appendChild(entry);
         drawer.scrollTop = drawer.scrollHeight;
+    }
+
+    async function loadPersistentActivity(validationId) {
+        const drawer = document.getElementById('drawerContent');
+        if (!drawer) return;
+
+        try {
+            const messages = await app().apiFetch(`/validations/${validationId}/timeline`);
+            if (messages && messages.length > 0) {
+                // Keep existing logs if any (streaming), otherwise clear
+                // For a reload, we clear
+                drawer.innerHTML = '<div class="text-xs text-dim mb-2 uppercase fw-700" style="opacity:0.5; border-bottom:1px solid var(--border-light); padding-bottom:0.25rem;">Historical Reasoning Logs</div>';
+
+                messages.forEach(m => {
+                    logActivity(`Agent ${m.agent_name}: ${m.content}`, m.status, m.created_at);
+                });
+            }
+        } catch (err) {
+            console.error("Failed to load timeline:", err);
+        }
     }
 
     async function startValidation(ideaId) {
@@ -823,38 +1074,80 @@ window.IdeaDetail = (() => {
     }
 
     function switchTab(tabId) {
-        // Update tab buttons
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            if (btn.dataset.tab === tabId) {
-                btn.classList.add('active');
-                btn.style.color = 'var(--primary)';
-                btn.style.borderBottomColor = 'var(--primary)';
-                btn.style.fontWeight = '700';
-            } else {
-                btn.classList.remove('active');
-                btn.style.color = 'var(--text-dim)';
-                btn.style.borderBottomColor = 'transparent';
-                btn.style.fontWeight = '600';
-            }
-        });
-
         // Hide all panes
         document.querySelectorAll('.tab-pane').forEach(pane => {
             pane.style.display = 'none';
+            pane.classList.remove('active');
         });
 
-        // Show active pane and initialize module if needed
+        // Show active pane
         const activePane = document.getElementById(`tabContent-${tabId}`);
-        if (activePane) activePane.style.display = 'block';
+        if (activePane) {
+            activePane.style.display = 'block';
+            activePane.classList.add('active');
+        }
 
+        // Sync sidebar active state
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            const linkRoute = link.dataset.route;
+            // Map module names to routes
+            const routeMap = {
+                'validation': '/validation',
+                'workspace': '/workspace',
+                'financials': '/financials',
+                'risks': '/risks',
+                'tasks': '/execution',
+                'meetings': '/meetings',
+                'expenses': '/expenses',
+                'journal': '/journal',
+                'experiments': '/tests'
+            };
+            const targetRoute = routeMap[tabId];
+            link.classList.toggle('active', linkRoute === targetRoute);
+        });
+
+        // Initialize module if needed
         if (tabId === 'tasks' && window.Tasks) {
             window.Tasks.init(currentIdeaId, `tabContent-${tabId}`);
         } else if (tabId === 'journal' && window.Journal) {
             window.Journal.init(currentIdeaId, `tabContent-${tabId}`);
         } else if (tabId === 'experiments' && window.Experiments) {
             window.Experiments.init(currentIdeaId, `tabContent-${tabId}`);
-        } else if (tabId === 'validation' && window.StickyNotes && Object.keys(currentIdea.validations || {}).length > 0) {
+        } else if (tabId === 'financials' && window.Financials) {
+            window.Financials.init(currentIdeaId, `tabContent-${tabId}`);
+        } else if (tabId === 'risks' && window.Risks) {
+            window.Risks.init(currentIdeaId, `tabContent-${tabId}`);
+        } else if (tabId === 'meetings' && window.Meetings) {
+            window.Meetings.init(currentIdeaId, `tabContent-${tabId}`);
+        } else if (tabId === 'expenses' && window.Expenses) {
+            window.Expenses.init(currentIdeaId, `tabContent-${tabId}`);
+        } else if (tabId === 'workspace' && window.Workspace) {
+            window.Workspace.init(currentIdeaId, 'workspaceContainer');
+        } else if (tabId === 'validation' && window.StickyNotes) {
             window.StickyNotes.init(currentIdeaId);
+        }
+    }
+
+    function switchSubTab(subtabId) {
+        document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+            const isActive = btn.dataset.subtab === subtabId;
+            btn.classList.toggle('active', isActive);
+            if (isActive) {
+                btn.style.color = 'var(--primary)';
+                btn.style.borderBottomColor = 'var(--primary)';
+            } else {
+                btn.style.color = 'var(--text-dim)';
+                btn.style.borderBottomColor = 'transparent';
+            }
+        });
+
+        document.querySelectorAll('.subtab-pane').forEach(pane => {
+            pane.style.display = (pane.id === `subtab-${subtabId}`) ? 'block' : 'none';
+        });
+
+        // Re-render charts if entering analytics tab
+        if (subtabId === 'val-analytics' && currentIdea?.validations?.[0]) {
+            setTimeout(() => renderCharts(currentIdea.validations[0]), 50);
         }
     }
 
@@ -879,5 +1172,407 @@ window.IdeaDetail = (() => {
         });
     }
 
-    return { render, startValidation, deleteIdea, openQA, submitQA, submitQuickAction, webValidate, exportPDF, switchTab, toggleRiskHeatmap };
+    // ── Chat Widget & Version Switching ─────────────────────────────────
+
+    async function toggleChatWidget(valId) {
+        const panel = document.getElementById('chatWidgetPanel');
+        if (!panel) return;
+
+        const isOpen = panel.classList.contains('open');
+        if (isOpen) {
+            panel.classList.remove('open');
+        } else {
+            panel.classList.add('open');
+            await loadChatHistory(valId);
+            setTimeout(() => {
+                const input = document.getElementById('chatWidgetInput');
+                if (input) input.focus();
+            }, 300);
+        }
+    }
+
+    async function loadChatHistory(valId) {
+        const msgContainer = document.getElementById('chatWidgetMessages');
+        if (!msgContainer) return;
+
+        try {
+            const history = await app().api.getChatHistory(valId);
+            msgContainer.innerHTML = '';
+            if (!history || history.length === 0) {
+                msgContainer.innerHTML = '<div class="text-dim text-xs text-center mt-2">Chat session opened. Ask me anything about this report!</div>';
+            } else {
+                history.forEach(msg => {
+                    msgContainer.innerHTML += `<div class="chat-message ${msg.role}">${esc(msg.content)}</div>`;
+                });
+            }
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        } catch (err) {
+            console.error("Failed to load chat:", err);
+            app().toast("Failed to load chat history.", "error");
+        }
+    }
+
+    async function sendChatMessage(valId) {
+        const input = document.getElementById('chatWidgetInput');
+        if (!input) return;
+
+        const content = input.value.trim();
+        if (!content) return;
+
+        input.value = '';
+        input.disabled = true;
+        const btn = document.getElementById('chatWidgetSendBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner" style="width:14px;height:14px;border-width:2px;border-top-color:transparent"></span>';
+        }
+
+        const msgContainer = document.getElementById('chatWidgetMessages');
+        // Remove empty state message if present
+        const em = msgContainer.querySelector('.text-center');
+        if (em) em.remove();
+
+        msgContainer.innerHTML += `<div class="chat-message user">${esc(content)}</div>`;
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+
+        try {
+            const response = await app().api.postChatMessage(valId, content);
+            msgContainer.innerHTML += `<div class="chat-message assistant">${esc(response.content)}</div>`;
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        } catch (err) {
+            app().toast(err.message, 'error');
+        } finally {
+            input.disabled = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>';
+            }
+            input.focus();
+        }
+    }
+
+    async function promptRebuild() {
+        if (!currentIdeaId) return;
+        const suggestion = prompt("Strategic Pivot: Enter instructions for the AI to completely rebuild this startup idea (e.g., 'Pivot to B2B targeting restaurants only'):");
+        if (!suggestion || !suggestion.trim()) return;
+
+        try {
+            const panel = document.getElementById('chatWidgetPanel');
+            if (panel) panel.classList.remove('open');
+            app().toast('Applying pivot instructions...', 'info');
+            await app().api.rebuildIdea(currentIdeaId, suggestion.trim());
+            // Now start the validation pipeline to stream the rebuild
+            startValidation(currentIdeaId);
+        } catch (err) {
+            app().toast(err.message, 'error');
+        }
+    }
+
+    function switchVersion(valId) {
+        // Find the idea data
+        app().api.getIdea(currentIdeaId).then(idea => {
+            const v = idea.validations.find(val => val.id == parseInt(valId));
+            if (v) {
+                const analytics = idea.scoring_analytics || null;
+                $content().innerHTML = buildPage(idea, v, analytics, window.currentWorkspaceTabs);
+                renderCharts(v);
+
+                // Select the option explicitly
+                const selector = document.querySelector('select[onchange^="window.IdeaDetail.switchVersion"]');
+                if (selector) selector.value = valId;
+            }
+        });
+    }
+
+    // ── V2 OS Workspace Dynamic Tabs & Blocks ─────────────────────────────
+
+    let currentTabId = null;
+    let quillInstances = {};
+
+    function renderWorkspaceContainer() {
+        const container = document.getElementById('workspaceContainer');
+        if (!container) return;
+
+        const tabs = window.currentWorkspaceTabs || [];
+
+        let html = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1.5rem;">
+                <div>
+                    <h3 style="margin:0; font-weight:800;">Strategic Workspace</h3>
+                    <p class="text-dim text-xs">Innovation scratchpad & project documentation</p>
+                </div>
+                <button class="btn btn-outline btn-sm" onclick="window.IdeaDetail.createWorkspaceTab()">+ New Tab</button>
+            </div>
+            <div class="workspace-tabs" style="display:flex; gap:0.5rem; overflow-x:auto; padding-bottom:0.75rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border-light);">
+                <button class="btn btn-sm ${currentTabId === 'core' ? 'btn-primary' : 'btn-outline'}" onclick="window.IdeaDetail.switchWorkspaceTab('core')" style="border-radius:20px;">
+                    🎯 Core Infrastructure
+                </button>
+        `;
+
+        if (tabs.length === 0 && !currentTabId) currentTabId = 'core';
+
+        tabs.forEach(t => {
+            const isActive = (currentTabId === t.id);
+            html += `
+                <button class="btn btn-sm ${isActive ? 'btn-primary' : 'btn-outline'}" onclick="window.IdeaDetail.switchWorkspaceTab(${t.id})" style="border-radius:20px;">
+                    ${esc(t.name)}
+                </button>
+            `;
+        });
+
+        html += `</div>`;
+
+        if (currentTabId === 'core') {
+            html += renderCoreIdeaDetails();
+        } else if (currentTabId) {
+            html += `
+                <div style="display:flex; justify-content:flex-end; margin-bottom: 1rem;">
+                    <button class="btn btn-outline btn-sm" onclick="window.IdeaDetail.createBlock('text')" title="Add Text Block">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Add Note Block
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="window.IdeaDetail.deleteWorkspaceTab(${currentTabId})" style="margin-left: 0.5rem;">
+                         Delete Tab
+                    </button>
+                </div>
+                <div id="workspaceBlocks" style="min-height: 200px;"></div>
+            `;
+        }
+
+        container.innerHTML = html;
+
+        if (currentTabId && currentTabId !== 'core') {
+            const activeTab = tabs.find(t => t.id === currentTabId);
+            if (activeTab) renderBlocks(activeTab.blocks);
+        }
+    }
+
+    function renderCoreIdeaDetails() {
+        // Find current idea from public API helper or store
+        const idea = window.currentIdeaData;
+        if (!idea) return '<p class="text-dim">Loading idea context...</p>';
+
+        return `
+            <div class="card" style="padding:1.5rem; border-left:4px solid var(--go);">
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block; font-size:0.75rem; text-transform:uppercase; font-weight:800; color:var(--text-dim); margin-bottom:0.5rem;">Startup Mission (Title)</label>
+                    <input type="text" id="editIdeaTitle" class="form-control" value="${esc(idea.title)}" style="font-weight:700; font-size:1.1rem;">
+                </div>
+                <div style="margin-bottom:1.5rem;">
+                    <label style="display:block; font-size:0.75rem; text-transform:uppercase; font-weight:800; color:var(--text-dim); margin-bottom:0.5rem;">Problem & Solution Description</label>
+                    <textarea id="editIdeaDesc" class="form-control" style="min-height:120px; line-height:1.6;">${esc(idea.description)}</textarea>
+                </div>
+                <div style="display:flex; justify-content:flex-end;">
+                    <button class="btn btn-primary" onclick="window.IdeaDetail.saveCoreDetails()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:8px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Apply Core Strategic Changes
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    async function saveCoreDetails() {
+        const title = document.getElementById('editIdeaTitle').value.trim();
+        const description = document.getElementById('editIdeaDesc').value.trim();
+        if (!title || !description) return;
+
+        try {
+            await app().api.updateIdea(currentIdeaId, { title, description });
+            app().toast('Core strategy updated', 'success');
+            setTimeout(() => render(currentIdeaId, 'workspace'), 500);
+        } catch (e) {
+            app().toast(e.message, 'error');
+        }
+    }
+
+    function switchWorkspaceTab(tabId) {
+        currentTabId = tabId;
+        renderWorkspaceContainer();
+    }
+
+    async function createWorkspaceTab() {
+        const name = prompt("Enter Tab Name:");
+        if (!name) return;
+        try {
+            const newTab = await app().api.createTab(currentIdeaId, { name, order: window.currentWorkspaceTabs.length });
+            window.currentWorkspaceTabs.push({ ...newTab, blocks: [] });
+            switchWorkspaceTab(newTab.id);
+            app().toast('Tab created', 'success');
+        } catch (e) {
+            app().toast(e.message, 'error');
+        }
+    }
+
+    async function deleteWorkspaceTab(tabId) {
+        if (!confirm('Are you sure you want to delete this tab and all its blocks?')) return;
+        try {
+            await app().api.deleteTab(tabId);
+            window.currentWorkspaceTabs = window.currentWorkspaceTabs.filter(t => t.id !== tabId);
+            currentTabId = window.currentWorkspaceTabs.length > 0 ? window.currentWorkspaceTabs[0].id : null;
+            renderWorkspaceContainer();
+            app().toast('Tab deleted', 'success');
+        } catch (e) {
+            app().toast(e.message, 'error');
+        }
+    }
+
+    function renderBlocks(blocks) {
+        const container = document.getElementById('workspaceBlocks');
+        if (!container) return;
+
+        // Clear old quills
+        quillInstances = {};
+
+        container.innerHTML = '';
+
+        // Add a primary "Idea Context" block if we're on the first tab and it's empty
+        if (blocks.length === 0) {
+            container.innerHTML = `
+                <div class="card" style="text-align:center; padding:3rem; border:2px dashed var(--border-light);">
+                    <p class="text-dim">This workspace is your strategic sandbox. Add a block to start drafting or refining.</p>
+                    <button class="btn btn-primary btn-sm mt-1" onclick="window.IdeaDetail.createBlock('text')">Add First Note</button>
+                </div>
+            `;
+            return;
+        }
+
+        blocks.sort((a, b) => a.order - b.order).forEach(block => {
+            const div = document.createElement('div');
+            div.className = 'workspace-block card mb-3';
+            div.dataset.id = block.id;
+            div.style.padding = '1.25rem';
+            div.style.position = 'relative';
+            div.style.borderLeft = '4px solid var(--primary)';
+
+            div.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem;">
+                    <div style="font-size:0.75rem; text-transform:uppercase; font-weight:800; color:var(--text-dim);">Innovation Note</div>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <div class="block-drag-handle" style="cursor: grab; color: var(--text-dim); opacity:0.5;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                        </div>
+                        <div class="block-delete" style="cursor: pointer; color: var(--kill); opacity:0.7;" onclick="window.IdeaDetail.deleteBlock(${block.id})" title="Delete Block">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="block-editor-container" id="editor-${block.id}" style="margin-bottom:1rem;"></div>
+                <div style="display:flex; justify-content:flex-end;">
+                    <button class="btn btn-primary btn-sm" onclick="window.IdeaDetail.saveBlock(${block.id})">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                        Save Note
+                    </button>
+                </div>
+            `;
+            container.appendChild(div);
+
+            // Init Quill
+            const quill = new Quill(`#editor-${block.id}`, {
+                theme: 'snow',
+                placeholder: 'Start writing your strategic notes...',
+                modules: {
+                    toolbar: [
+                        [{ 'header': [2, 3, false] }],
+                        ['bold', 'italic', 'underline'],
+                        [{ 'list': 'bullet' }],
+                        ['link', 'clean']
+                    ]
+                }
+            });
+            // Load content
+            if (block.content && block.content.html) {
+                quill.clipboard.dangerouslyPasteHTML(block.content.html);
+            } else if (block.content && block.content.text) {
+                quill.insertText(0, block.content.text);
+            }
+            quillInstances[block.id] = quill;
+        });
+
+        // Init SortableJS
+        Sortable.create(container, {
+            handle: '.block-drag-handle',
+            animation: 150,
+            onEnd: async function (evt) {
+                const itemEls = container.querySelectorAll('.workspace-block');
+                const updates = Array.from(itemEls).map((el, i) => {
+                    return app().apiFetch(`/blocks/${el.dataset.id}`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ order: i })
+                    });
+                });
+                try {
+                    await Promise.all(updates);
+                    app().toast('Order saved', 'info');
+                } catch (e) {
+                    app().toast('Failed to save order', 'error');
+                }
+            }
+        });
+    }
+
+    async function createBlock(type = 'text') {
+        const t = window.currentWorkspaceTabs.find(tx => tx.id === currentTabId);
+        if (!t) return;
+        try {
+            const block = await app().api.createBlock(currentTabId, {
+                block_type: type,
+                content: { html: '' },
+                order: t.blocks.length
+            });
+            t.blocks.push(block);
+            renderWorkspaceContainer();
+            app().toast('Block added', 'success');
+        } catch (e) {
+            app().toast(e.message, 'error');
+        }
+    }
+
+    async function saveBlock(blockId) {
+        const quill = quillInstances[blockId];
+        if (!quill) return;
+        const html = quill.root.innerHTML;
+        const text = quill.getText();
+        try {
+            const btn = document.querySelector(`.workspace-block[data-id="${blockId}"] button`);
+            if (btn) btn.textContent = 'Saving...';
+
+            await app().api.updateBlock(blockId, { content: { html, text } });
+
+            const t = window.currentWorkspaceTabs.find(tx => tx.id === currentTabId);
+            if (t) {
+                const b = t.blocks.find(bx => String(bx.id) === String(blockId));
+                if (b) b.content = { html, text };
+            }
+            app().toast('Block saved', 'success');
+
+            if (btn) btn.textContent = 'Save Content';
+        } catch (e) {
+            app().toast(e.message, 'error');
+        }
+    }
+
+    async function deleteBlock(blockId) {
+        if (!confirm('Delete this block?')) return;
+        try {
+            await app().api.deleteBlock(blockId);
+            const t = window.currentWorkspaceTabs.find(tx => tx.id === currentTabId);
+            if (t) {
+                t.blocks = t.blocks.filter(bx => String(bx.id) !== String(blockId));
+            }
+            renderWorkspaceContainer();
+            app().toast('Block deleted', 'success');
+        } catch (e) {
+            app().toast(e.message, 'error');
+        }
+    }
+
+
+    return {
+        render, switchTab, switchSubTab, startValidation, deleteIdea, exportPDF,
+        openQA, submitQA, submitQuickAction, webValidate, toggleRiskHeatmap,
+        toggleChatWidget, sendChatMessage, promptRebuild, regenerateSummary,
+        // Workspace exports
+        switchWorkspaceTab, createWorkspaceTab, deleteWorkspaceTab,
+        createBlock, saveBlock, deleteBlock
+    };
 })();

@@ -11,34 +11,140 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- jsPDF for PDF export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <!-- Quill.js for Notion-like Rich Text Blocks -->
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    <!-- Sortable.js for Drag & Drop Blocks -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css?v=3.1">
 </head>
 
 <body>
 
-    <!-- Navigation -->
-    <nav class="navbar">
-        <a href="#/" class="brand">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                <path d="M2 17l10 5 10-5" />
-                <path d="M2 12l10 5 10-5" />
-            </svg>
-            IdeaValidator.ai
-        </a>
-        <div class="nav-links">
-            <a href="#/" class="nav-link" data-route="/">Dashboard</a>
-            <a href="#/compare" class="nav-link" data-route="/compare">Compare</a>
-            <a href="#/glossary" class="nav-link" data-route="/glossary">Methodology</a>
-            <a href="#/settings" class="nav-link" data-route="/settings">Settings</a>
-            <button class="btn btn-primary btn-sm" onclick="window.IdeaApp.showNewIdeaModal()">+ New Idea</button>
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar" id="appSidebar">
+        <div class="sidebar-brand">
+            <a href="#/">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5" />
+                    <path d="M2 12l10 5 10-5" />
+                </svg>
+                <span>IdeaValidator</span>
+            </a>
         </div>
-    </nav>
+        <nav class="sidebar-nav">
+            <a href="#/" class="sidebar-link active" data-route="/">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                </svg>
+                Dashboard
+            </a>
+            <a href="#/workspace" class="sidebar-link" data-route="/workspace">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                    <polyline points="9 22 9 12 15 12 15 22" />
+                </svg>
+                Workspace
+            </a>
+            <a href="#/validation" class="sidebar-link" data-route="/validation">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                </svg>
+                Validation
+            </a>
+            <a href="#/financials" class="sidebar-link" data-route="/financials">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+                Financials
+            </a>
+            <a href="#/risks" class="sidebar-link" data-route="/risks">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path
+                        d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                Risks & Moats
+            </a>
+            <a href="#/execution" class="sidebar-link" data-route="/execution">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="4 7 4 4 20 4 20 7" />
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                    <line x1="9" y1="21" x2="9" y2="7" />
+                    <line x1="15" y1="21" x2="15" y2="7" />
+                </svg>
+                Execution
+            </a>
+            <div style="margin: 0.75rem 0.5rem; border-top: 1px solid var(--sidebar-border); opacity: 0.5;"></div>
+            <a href="#/meetings" class="sidebar-link" data-route="/meetings">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                </svg>
+                Meetings
+            </a>
+            <a href="#/expenses" class="sidebar-link" data-route="/expenses">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                    <line x1="1" y1="10" x2="23" y2="10" />
+                </svg>
+                Expenses
+            </a>
+            <a href="#/journal" class="sidebar-link" data-route="/journal">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                </svg>
+                Journal
+            </a>
+            <a href="#/tests" class="sidebar-link" data-route="/tests">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path
+                        d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                </svg>
+                Real-World Tests
+            </a>
+            <div style="flex: 1;"></div>
+            <a href="#/settings" class="sidebar-link" data-route="/settings">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3" />
+                    <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                </svg>
+                Settings
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Top Header Bar -->
+    <header class="topbar" id="appTopbar">
+        <div></div>
+        <div style="display:flex;align-items:center;gap:1rem;">
+            <div class="theme-toggle" id="topThemeToggle">
+                <button onclick="window.Settings && window.Settings.setTheme('light')" title="Light">☀️</button>
+                <button onclick="window.Settings && window.Settings.setTheme('dark')" title="Dark">🌙</button>
+                <button onclick="window.Settings && window.Settings.setTheme('system')" title="System">💻</button>
+            </div>
+            <div id="userProfileNav" style="display:none;align-items:center;gap:0.5rem;">
+                <span id="navUsername" style="font-weight:600;font-size:0.85rem;"></span>
+                <button class="btn btn-outline btn-sm" onclick="window.IdeaApp.logout()"
+                    style="padding:0.2rem 0.5rem;font-size:0.75rem;">Logout</button>
+            </div>
+        </div>
+    </header>
 
     <!-- Main Content Area -->
-    <div id="mainContainer" class="app-container">
+    <div id="mainContainer" class="app-container with-sidebar">
         <div id="appContent">
-            <!-- Routed views (Dashboard, IdeaDetail, Comparison) injected here -->
+            <!-- Routed views injected here -->
         </div>
     </div>
 
@@ -59,11 +165,12 @@
         </div>
     </div>
 
-    <!-- New Idea Modal -->
+    <!-- New Idea Modal (Structured Intake Wizard) -->
     <div id="newIdeaModal" class="modal-overlay" onclick="if(event.target===this) window.IdeaApp.closeNewIdeaModal()">
-        <form id="newIdeaForm" class="modal-content" onsubmit="window.IdeaApp.submitNewIdea(event)">
+        <form id="newIdeaForm" class="modal-content" style="max-width: 650px;"
+            onsubmit="window.IdeaApp.submitNewIdea(event)">
             <div class="modal-header">
-                <h2>New Startup Idea</h2>
+                <h2>New Startup Idea Intake</h2>
                 <button type="button" class="drawer-close" onclick="window.IdeaApp.closeNewIdeaModal()"><svg width="20"
                         height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -71,24 +178,329 @@
                     </svg></button>
             </div>
 
-            <div class="form-group">
-                <label for="ideaTitle">Startup Name / Title</label>
-                <input type="text" id="ideaTitle" class="form-control" placeholder="e.g. AI-Powered Resume Builder"
+            <!-- Wizard Progress Tracking -->
+            <div class="wizard-progress" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <div class="progress-step active" id="step-dot-1"
+                    style="flex: 1; height: 4px; background: var(--border); border-radius: 2px;"></div>
+                <div class="progress-step" id="step-dot-2"
+                    style="flex: 1; height: 4px; background: var(--border); border-radius: 2px;"></div>
+                <div class="progress-step" id="step-dot-3"
+                    style="flex: 1; height: 4px; background: var(--border); border-radius: 2px;"></div>
+                <div class="progress-step" id="step-dot-4"
+                    style="flex: 1; height: 4px; background: var(--border); border-radius: 2px;"></div>
+            </div>
+
+            <!-- Step 1: Core Concept -->
+            <div id="wizard-step-1" class="wizard-step active">
+                <h3>1. Core Concept</h3>
+                <div class="form-group mt-3">
+                    <label>Startup Name / Title <span class="text-red-500">*</span></label>
+                    <input type="text" id="intake-title" class="form-control"
+                        placeholder="e.g. AI-Powered Resume Builder" required>
+                </div>
+                <div class="form-group">
+                    <label>What problem are you solving? <span class="text-red-500">*</span></label>
+                    <textarea id="intake-problem" class="form-control" rows="3"
+                        placeholder="Identify the core pain point..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Proposed Solution <span class="text-red-500">*</span></label>
+                    <textarea id="intake-solution" class="form-control" rows="3"
+                        placeholder="How does your startup fix it?" required></textarea>
+                </div>
+            </div>
+
+            <!-- Step 2: Deep Discovery -->
+            <div id="wizard-step-2" class="wizard-step" style="display: none;">
+                <h3>2. Demographics & Revenue</h3>
+                <div class="grid grid-2 gap-3 mt-3">
+                    <div class="form-group">
+                        <label>Target Audience Type</label>
+                        <select id="intake-audience-type" class="form-control">
+                            <option value="B2C">B2C (Consumers)</option>
+                            <option value="B2B">B2B (Businesses)</option>
+                            <option value="D2C">D2C (Direct to Consumer)</option>
+                            <option value="Hybrid">Hybrid Marketplace</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Location Focus</label>
+                        <input type="text" id="intake-location" class="form-control" value="India (Default)">
+                    </div>
+                    <div class="form-group">
+                        <label>City Tier(s)</label>
+                        <div class="multi-select-grid"
+                            style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+                            <label class="checkbox-label"><input type="checkbox" name="intake-tier" value="Tier 1"> Tier
+                                1</label>
+                            <label class="checkbox-label"><input type="checkbox" name="intake-tier" value="Tier 2"> Tier
+                                2</label>
+                            <label class="checkbox-label"><input type="checkbox" name="intake-tier" value="Tier 3"> Tier
+                                3</label>
+                            <label class="checkbox-label"><input type="checkbox" name="intake-tier" value="Pan-India">
+                                Pan-India</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Age Group</label>
+                        <input type="text" id="intake-age" class="form-control"
+                            placeholder="e.g. 18-25 college students">
+                    </div>
+                </div>
+                <div class="grid grid-2 gap-3">
+                    <div class="form-group">
+                        <label>Revenue Model(s)</label>
+                        <div class="multi-select-grid"
+                            style="display:grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
+                            <label class="checkbox-label"><input type="checkbox" name="intake-revenue-type"
+                                    value="Subscription"> Subscription</label>
+                            <label class="checkbox-label"><input type="checkbox" name="intake-revenue-type"
+                                    value="Marketplace Fee"> Marketplace Fee</label>
+                            <label class="checkbox-label"><input type="checkbox" name="intake-revenue-type"
+                                    value="Commission"> Commission</label>
+                            <label class="checkbox-label"><input type="checkbox" name="intake-revenue-type"
+                                    value="Freemium/Ads"> Freemium/Ads</label>
+                            <label class="checkbox-label"><input type="checkbox" name="intake-revenue-type"
+                                    value="Licensing/SaaS"> Licensing/SaaS</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Expected Price Range (₹)</label>
+                        <input type="text" id="intake-price" class="form-control" placeholder="e.g. ₹499/month">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Market & Competitors -->
+            <div id="wizard-step-3" class="wizard-step" style="display: none;">
+                <h3>3. Market Landscape</h3>
+                <div class="form-group mt-3">
+                    <label>Known Competitors (Indian & Global)</label>
+                    <textarea id="intake-competitors" class="form-control" rows="3"
+                        placeholder="List any competitors. If none, agents will auto-discover Indian market matches."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Market Trends / Timing</label>
+                    <textarea id="intake-trends" class="form-control" rows="3"
+                        placeholder="Why now? Are there regulatory tailwinds or shifting consumer habits?"></textarea>
+                </div>
+            </div>
+
+            <!-- Step 4: Execution -->
+            <div id="wizard-step-4" class="wizard-step" style="display: none;">
+                <h3>4. Execution & Risks</h3>
+                <div class="form-group mt-3">
+                    <label>User Onboarding Strategy</label>
+                    <textarea id="intake-onboarding" class="form-control" rows="3"
+                        placeholder="How will users sign up? WhatsApp? App download? Influencer marketing?"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Perceived Risks</label>
+                    <textarea id="intake-risks" class="form-control" rows="3"
+                        placeholder="What keeps you up at night about this idea?"></textarea>
+                </div>
+            </div>
+
+            <div
+                style="display:flex; justify-content:space-between; align-items:center; margin-top:2rem; padding-top: 1rem; border-top: 1px solid var(--border)">
+                <button type="button" class="btn btn-outline" id="btn-wizard-prev" onclick="window.IdeaApp.wizardPrev()"
+                    style="visibility: hidden;">Back</button>
+                <div style="display:flex; gap:0.5rem">
+                    <button type="button" class="btn btn-outline"
+                        onclick="window.IdeaApp.closeNewIdeaModal()">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="btn-wizard-next"
+                        onclick="window.IdeaApp.wizardNext()">Next</button>
+                    <button type="submit" class="btn btn-success" id="btn-wizard-submit" style="display: none;">Create &
+                        Validate</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <!-- New Journal Entry Modal -->
+    <div id="newJournalModal" class="modal-overlay" onclick="if(event.target===this) window.Journal.closeModal()">
+        <form class="modal-content" style="max-width: 500px;" onsubmit="window.Journal.submitNewEntry(event)">
+            <div class="modal-header">
+                <h2>New Execution Journal Entry</h2>
+                <button type="button" class="drawer-close" onclick="window.Journal.closeModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding:1.5rem">
+                <div class="form-group">
+                    <label>Log Entry / Thought</label>
+                    <textarea id="journal-content" class="form-control" rows="5"
+                        placeholder="Document a milestone, a pivot, or a realization..." required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Tags (Comma Separated)</label>
+                    <input type="text" id="journal-tags" class="form-control"
+                        placeholder="e.g. pivot, milestone, research">
+                </div>
+            </div>
+            <div class="modal-footer"
+                style="padding:1rem 1.5rem; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end; gap:0.5rem">
+                <button type="button" class="btn btn-outline" onclick="window.Journal.closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save Entry</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- New Experiment Modal -->
+    <div id="newExperimentModal" class="modal-overlay"
+        onclick="if(event.target===this) window.Experiments.closeModal()">
+        <form class="modal-content" style="max-width: 600px;" onsubmit="window.Experiments.submitNewExperiment(event)">
+            <div class="modal-header">
+                <h2>Design Real-World Test</h2>
+                <button type="button" class="drawer-close" onclick="window.Experiments.closeModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="padding:1.5rem">
+                <div class="form-group">
+                    <label>Hypothesis</label>
+                    <textarea id="exp-hypothesis" class="form-control" rows="2"
+                        placeholder="If we [action], then [result] will happen." required></textarea>
+                </div>
+                <div class="grid grid-2 gap-3">
+                    <div class="form-group">
+                        <label>Primary Metric</label>
+                        <input type="text" id="exp-metric" class="form-control" placeholder="e.g. Conversion Rate"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label>Target Criteria</label>
+                        <input type="text" id="exp-target" class="form-control" placeholder="e.g. > 5%" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Timeframe</label>
+                    <input type="text" id="exp-timeframe" class="form-control" placeholder="e.g. 2 weeks">
+                </div>
+            </div>
+            <div class="modal-footer"
+                style="padding:1rem 1.5rem; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end; gap:0.5rem">
+                <button type="button" class="btn btn-outline" onclick="window.Experiments.closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Launch Test</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal-overlay" style="z-index: 9999; background: rgba(15,23,42,0.9);">
+        <div class="modal-content" style="max-width: 400px; text-align: center;">
+            <div style="margin-bottom: 2rem;">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2"
+                    style="margin-bottom: 1rem;">
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5" />
+                    <path d="M2 12l10 5 10-5" />
+                </svg>
+                <h2>IdeaValidator.ai</h2>
+                <p class="text-dim text-sm">Sign in to your strategic workspace</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="loginForm" onsubmit="window.IdeaApp.submitLogin(event)">
+                <div class="form-group text-left">
+                    <label>Email Address</label>
+                    <input type="email" id="loginEmail" class="form-control" placeholder="founder@startup.com" required>
+                </div>
+                <div class="form-group text-left">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mt-2" id="btnLogin">Sign In</button>
+                <p class="text-sm mt-3">Don't have an account? <a href="#"
+                        onclick="window.IdeaApp.toggleAuthView('register'); return false;"
+                        style="color: var(--primary);">Create one</a></p>
+            </form>
+
+            <!-- Register Form -->
+            <form id="registerForm" onsubmit="window.IdeaApp.submitRegister(event)" style="display: none;">
+                <div class="form-group text-left">
+                    <label>Full Name</label>
+                    <input type="text" id="regName" class="form-control" placeholder="Jane Doe" required>
+                </div>
+                <div class="form-group text-left">
+                    <label>Email Address</label>
+                    <input type="email" id="regEmail" class="form-control" placeholder="founder@startup.com" required>
+                </div>
+                <div class="form-group text-left">
+                    <label>Password (min 8 chars)</label>
+                    <input type="password" id="regPassword" class="form-control" placeholder="••••••••" required
+                        minlength="8">
+                </div>
+                <button type="submit" class="btn btn-primary w-100 mt-2" id="btnRegister">Create Workspace</button>
+                <p class="text-sm mt-3">Already have an account? <a href="#"
+                        onclick="window.IdeaApp.toggleAuthView('login'); return false;"
+                        style="color: var(--primary);">Sign in</a></p>
+            </form>
+        </div>
+    </div>
+
+    <!-- New Journal Entry Modal -->
+    <div id="newJournalModal" class="modal-overlay" onclick="if(event.target===this) window.Journal.closeModal()">
+        <form class="modal-content" style="max-width: 500px;" onsubmit="window.Journal.submitNewEntry(event)">
+            <div class="modal-header">
+                <h2>New Journal Entry</h2>
+                <button type="button" class="drawer-close" onclick="window.Journal.closeModal()"><svg width="20"
+                        height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg></button>
+            </div>
+            <div class="form-group mt-3">
+                <label>What did you learn today? <span class="text-red-500">*</span></label>
+                <textarea id="journal-content" class="form-control" rows="4"
+                    placeholder="Document conversations, market responses, or pivot ideas..." required></textarea>
+            </div>
+            <div class="form-group mt-3">
+                <label>Tags (Comma separated)</label>
+                <input type="text" id="journal-tags" class="form-control"
+                    placeholder="e.g. customer-interview, pricing, pivot">
+            </div>
+            <button type="submit" class="btn btn-primary w-100 mt-4">Save Entry</button>
+        </form>
+    </div>
+
+    <!-- New Experiment Modal -->
+    <div id="newExperimentModal" class="modal-overlay"
+        onclick="if(event.target===this) window.Experiments.closeModal()">
+        <form class="modal-content" style="max-width: 550px;" onsubmit="window.Experiments.submitNewExperiment(event)">
+            <div class="modal-header">
+                <h2>Design New Experiment</h2>
+                <button type="button" class="drawer-close" onclick="window.Experiments.closeModal()"><svg width="20"
+                        height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg></button>
+            </div>
+            <div class="form-group mt-3">
+                <label>Hypothesis <span class="text-red-500">*</span></label>
+                <textarea id="exp-hypothesis" class="form-control" rows="2"
+                    placeholder="If we offer X, then Y% of users will buy it." required></textarea>
+            </div>
+            <div class="form-group mt-3">
+                <label>Key Metric <span class="text-red-500">*</span></label>
+                <input type="text" id="exp-metric" class="form-control" placeholder="e.g. Conversion Rate, Signups"
                     required>
             </div>
-
-            <div class="form-group">
-                <label for="ideaDescription">Core Concept (Target Audience, Problem, Solution)</label>
-                <textarea id="ideaDescription" class="form-control" rows="5"
-                    placeholder="Describe the idea in 2-3 sentences. Who is it for? What problem does it solve?"
-                    required></textarea>
+            <div class="form-group mt-3">
+                <label>Target Criteria for Success <span class="text-red-500">*</span></label>
+                <input type="text" id="exp-target" class="form-control" placeholder="e.g. > 5%" required>
             </div>
-
-            <div style="display:flex; justify-content:flex-end; gap:0.5rem; margin-top:2rem">
-                <button type="button" class="btn btn-outline"
-                    onclick="window.IdeaApp.closeNewIdeaModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create & Validate</button>
+            <div class="form-group mt-3">
+                <label>Timeframe (Optional)</label>
+                <input type="text" id="exp-timeframe" class="form-control" placeholder="e.g. 2 weeks">
             </div>
+            <button type="submit" class="btn btn-primary w-100 mt-4">Start Experiment</button>
         </form>
     </div>
 
@@ -96,18 +508,23 @@
     <div id="toastContainer"></div>
 
     <!-- App Scripts -->
-    <script src="/static/js/app.js?v=3"></script>
-    <script src="/static/js/dashboard.js?v=5"></script>
-    <script src="/static/js/idea-detail.js"></script>
-    <script src="/static/js/tasks.js"></script>
-    <script src="/static/js/journal.js"></script>
-    <script src="/static/js/experiments.js"></script>
-    <script src="/static/js/stickies.js"></script>
-    <script src="/static/js/comparison.js"></script>
-    <script src="/static/js/glossary.js"></script>
-    <script src="/static/js/settings.js?v=2"></script>
-    <script src="/static/js/pdf-export.js"></script>
-
+    <script src="/static/js/app.js?v=7"></script>
+    <script src="/static/js/dashboard.js?v=7"></script>
+    <script src="/static/js/idea-detail.js?v=7"></script>
+    <script src="/static/js/workspace.js?v=7"></script>
+    <script src="/static/js/tasks.js?v=7"></script>
+    <script src="/static/js/journal.js?v=7"></script>
+    <script src="/static/js/experiments.js?v=7"></script>
+    <script src="/static/js/stickies.js?v=7"></script>
+    <script src="/static/js/comparison.js?v=7"></script>
+    <script src="/static/js/glossary.js?v=6"></script>
+    <script src="/static/js/settings.js?v=6"></script>
+    <script src="/static/js/pdf-export.js?v=6"></script>
+    <script src="/static/js/financials.js?v=6"></script>
+    <script src="/static/js/risks.js?v=6"></script>
+    <script src="/static/js/meetings.js?v=6"></script>
+    <script src="/static/js/expenses.js?v=6"></script>
+    <script src="/static/js/collaboration.js?v=6"></script>
 </body>
 
 </html>

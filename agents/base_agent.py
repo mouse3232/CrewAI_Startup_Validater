@@ -38,6 +38,17 @@ class BaseAgent(ABC):
     def run(self, idea: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
         context = context or {}
         messages = self.build_messages(idea, context)
+        
+        # Inject India-First rule into the system prompt universally
+        india_rule = (
+            "\n\nINDIA-FIRST & INR MANDATE:\n"
+            "Unless the user explicitly specifies a different country in the input data, you MUST assume the target market is India. "
+            "All currency outputs, pricing calculations, financial metrics, CAC, LTV, revenue models, and capital requirements MUST be strictly in INR (₹) formatted as '₹X'. "
+            "Consider Indian market realities, compliance limits, and consumer behavior by default."
+        )
+        if messages and messages[0].get("role") == "system":
+            messages[0]["content"] += india_rule
+
         raw = self.client.chat_completion(
             config=self.config,
             messages=messages,
