@@ -86,12 +86,53 @@ def init_db():
 
 def _safe_add_columns():
     """Add missing columns to existing tables (SQLite/Postgres safe)."""
+    is_pg = DATABASE_URL.startswith("postgresql")
+    json_type = "JSON" if is_pg else "TEXT"
+    json_default_dict = "DEFAULT '{}'::json" if is_pg else "DEFAULT '{}'"
+    json_default_list = "DEFAULT '[]'::json" if is_pg else "DEFAULT '[]'"
+
     migrations = [
+        # ── ideas table ──────────────────────────────────────────────
         ("ideas", "workspace_id", "INTEGER REFERENCES workspaces(id) ON DELETE CASCADE"),
+        ("ideas", "structured_input", f"{json_type} {json_default_dict}"),
+        ("ideas", "updated_at", "TIMESTAMP"),
+        # ── validations table ────────────────────────────────────────
+        ("validations", "structured_idea", f"{json_type} {json_default_dict}"),
+        ("validations", "confidence_index", "FLOAT"),
+        ("validations", "executive_summary", f"{json_type} {json_default_dict}"),
+        ("validations", "score_history", f"{json_type} {json_default_list}"),
+        ("validations", "refinement_history", f"{json_type} {json_default_list}"),
+        # ── sticky_notes table ───────────────────────────────────────
         ("sticky_notes", "color", "VARCHAR(20) DEFAULT 'yellow'"),
+        ("sticky_notes", "is_visible", "INTEGER DEFAULT 1"),
         ("sticky_notes", "is_pinned", "INTEGER DEFAULT 0"),
+        ("sticky_notes", "position_x", "INTEGER DEFAULT 0"),
+        ("sticky_notes", "position_y", "INTEGER DEFAULT 0"),
         ("sticky_notes", "width", "INTEGER DEFAULT 220"),
         ("sticky_notes", "height", "INTEGER DEFAULT 200"),
+        ("sticky_notes", "assigned_user", "VARCHAR(100)"),
+        ("sticky_notes", "deadline", "TIMESTAMP"),
+        # ── tasks table ──────────────────────────────────────────────
+        ("tasks", "priority", "VARCHAR(20) DEFAULT 'medium'"),
+        ("tasks", "related_section", "VARCHAR(100)"),
+        ("tasks", "assigned_agent", "VARCHAR(100)"),
+        ("tasks", "start_date", "TIMESTAMP"),
+        ("tasks", "deadline", "TIMESTAMP"),
+        ("tasks", "progress", "INTEGER DEFAULT 0"),
+        ("tasks", "updated_at", "TIMESTAMP"),
+        # ── experiments table ────────────────────────────────────────
+        ("experiments", "timeframe", "VARCHAR(50)"),
+        ("experiments", "updated_at", "TIMESTAMP"),
+        # ── meetings table ───────────────────────────────────────────
+        ("meetings", "decisions", "TEXT"),
+        ("meetings", "tasks_assigned", f"{json_type} {json_default_list}"),
+        ("meetings", "attachments", f"{json_type} {json_default_list}"),
+        ("meetings", "updated_at", "TIMESTAMP"),
+        # ── expenses table ───────────────────────────────────────────
+        ("expenses", "actual_cost", "FLOAT DEFAULT 0"),
+        ("expenses", "date", "TIMESTAMP"),
+        ("expenses", "notes", "TEXT"),
+        ("expenses", "updated_at", "TIMESTAMP"),
     ]
     with engine.connect() as conn:
         for table, column, col_type in migrations:
